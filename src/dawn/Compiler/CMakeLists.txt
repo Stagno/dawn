@@ -11,11 +11,12 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 yoda_add_library(
   NAME DawnCompiler
   SOURCES DawnCompiler.h
-          DawnCompiler.cpp
+#          DawnCompiler.cpp
+          DawnCompilerMock.cpp
           DiagnosticsEngine.cpp
           DiagnosticsEngine.h
           DiagnosticsMessage.h

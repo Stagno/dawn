@@ -11,24 +11,25 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 yoda_add_library(
   NAME DawnC
-  SOURCES Dawn.h
-          Compiler.cpp
-          Compiler.h
-          ErrorHandling.cpp
-          ErrorHandling.h
-          Options.cpp
-          Options.h
-          TranslationUnit.cpp
-          TranslationUnit.h
-          Types.h
-          util/Allocate.h
-          util/CompilerWrapper.h          
-          util/OptionsWrapper.cpp
-          util/OptionsWrapper.h
-          util/TranslationUnitWrapper.h
+  SOURCES Types.h
+#  SOURCES Dawn.h
+#          Compiler.cpp
+#          Compiler.h
+#          ErrorHandling.cpp
+#          ErrorHandling.h
+#          Options.cpp
+#          Options.h
+#          TranslationUnit.cpp
+#          TranslationUnit.h
+#          Types.h
+#          util/Allocate.h
+#          util/CompilerWrapper.h
+#          util/OptionsWrapper.cpp
+#          util/OptionsWrapper.h
+#          util/TranslationUnitWrapper.h
   OBJECT
 )
 

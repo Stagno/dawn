@@ -11,7 +11,7 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 dawn_add_unittest_impl(
   NAME DawnUnittestIIR
   SOURCES
@@ -24,7 +24,7 @@ dawn_add_unittest_impl(
           TestMain.cpp
           TestMultiInterval.cpp
           TestStencil.cpp
-          TestIIRSerializer.cpp
+#          TestIIRSerializer.cpp
 )
 target_include_directories(DawnUnittestIIR PUBLIC $<TARGET_PROPERTY:DawnIIRObjects,INCLUDE_DIRECTORIES>)
 

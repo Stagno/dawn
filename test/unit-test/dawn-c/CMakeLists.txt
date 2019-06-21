@@ -11,10 +11,10 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 dawn_add_unittest_impl(
   NAME DawnCUnittest
   SOURCES TestMain.cpp
-          TestOptions.cpp
-          TestCompiler.cpp
+#          TestOptions.cpp
+#          TestCompiler.cpp
 )

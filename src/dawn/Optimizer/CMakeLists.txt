@@ -11,7 +11,7 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 yoda_add_library(
   NAME DawnOptimizer
   SOURCES AccessComputation.h
@@ -23,61 +23,61 @@ yoda_add_library(
           OptimizerContext.cpp 
           OptimizerContext.h
           Pass.h
-          PassComputeStageExtents.cpp
-          PassComputeStageExtents.h
-          PassDataLocalityMetric.cpp      
-          PassDataLocalityMetric.h
-          PassFieldVersioning.cpp
-          PassFieldVersioning.h
-          PassInlining.cpp
-          PassInlining.h
-          PassManager.cpp   
-          PassManager.h 
-          PassMultiStageSplitter.cpp
-          PassMultiStageSplitter.h
-          PassPrintStencilGraph.cpp
-          PassPrintStencilGraph.h
-          PassSetBlockSize.cpp
-          PassSetBlockSize.h
-          PassSetBoundaryCondition.cpp
-          PassSetBoundaryCondition.h
-          PassSetCaches.cpp
-          PassSetCaches.h
-          PassSetNonTempCaches.cpp
-          PassSetNonTempCaches.h
-          PassSetStageGraph.cpp
-          PassSetStageGraph.h
-          PassSetStageName.cpp
-          PassSetStageName.h
-          PassSetSyncStage.cpp
-          PassSetSyncStage.h
-          PassSSA.cpp
-          PassSSA.h
-          PassStageMerger.cpp
-          PassStageMerger.h
-          PassStageReordering.cpp
-          PassStageReordering.h
-          PassStageSplitter.cpp
-          PassStageSplitter.h
-          PassStencilSplitter.cpp
-          PassStencilSplitter.h
-          PassTemporaryFirstAccess.cpp
-          PassTemporaryFirstAccess.h
-          PassTemporaryMerger.cpp
-          PassTemporaryMerger.h
+#          PassComputeStageExtents.cpp
+#          PassComputeStageExtents.h
+#          PassDataLocalityMetric.cpp
+#          PassDataLocalityMetric.h
+#          PassFieldVersioning.cpp
+#          PassFieldVersioning.h
+#          PassInlining.cpp
+#          PassInlining.h
+          PassManager.cpp
+          PassManager.h
+#          PassMultiStageSplitter.cpp
+#          PassMultiStageSplitter.h
+#          PassPrintStencilGraph.cpp
+#          PassPrintStencilGraph.h
+#          PassSetBlockSize.cpp
+#          PassSetBlockSize.h
+#          PassSetBoundaryCondition.cpp
+#          PassSetBoundaryCondition.h
+#          PassSetCaches.cpp
+#          PassSetCaches.h
+#          PassSetNonTempCaches.cpp
+#          PassSetNonTempCaches.h
+#          PassSetStageGraph.cpp
+#          PassSetStageGraph.h
+#          PassSetStageName.cpp
+#          PassSetStageName.h
+#          PassSetSyncStage.cpp
+#          PassSetSyncStage.h
+#          PassSSA.cpp
+#          PassSSA.h
+#          PassStageMerger.cpp
+#          PassStageMerger.h
+#          PassStageReordering.cpp
+#          PassStageReordering.h
+#          PassStageSplitter.cpp
+#          PassStageSplitter.h
+#          PassStencilSplitter.cpp
+#          PassStencilSplitter.h
+#          PassTemporaryFirstAccess.cpp
+#          PassTemporaryFirstAccess.h
+#          PassTemporaryMerger.cpp
+#          PassTemporaryMerger.h
           PassTemporaryType.cpp
           PassTemporaryType.h
-          PassTemporaryToStencilFunction.cpp
-          PassTemporaryToStencilFunction.h
+#          PassTemporaryToStencilFunction.cpp
+#          PassTemporaryToStencilFunction.h
           ReadBeforeWriteConflict.cpp
           ReadBeforeWriteConflict.h
           Renaming.cpp
           Renaming.h
-          ReorderStrategy.h
-          ReorderStrategyGreedy.cpp
-          ReorderStrategyGreedy.h
-          ReorderStrategyPartitioning.cpp
-          ReorderStrategyPartitioning.h
+#          ReorderStrategy.h
+#          ReorderStrategyGreedy.cpp
+#          ReorderStrategyGreedy.h
+#          ReorderStrategyPartitioning.cpp
+#          ReorderStrategyPartitioning.h
           Replacing.cpp
           Replacing.h
           StatementMapper.cpp

@@ -11,13 +11,13 @@
 ##  See LICENSE.txt for details.
 ##
 ##===------------------------------------------------------------------------------------------===##
-
+#TODO iir_restructuring RECOVER
 yoda_add_library(
   NAME DawnSerializer
   SOURCES ASTSerializer.h
           ASTSerializer.cpp
-          IIRSerializer.h
-          IIRSerializer.cpp
+#          IIRSerializer.h
+#          IIRSerializer.cpp
           SIRSerializer.h
           SIRSerializer.cpp
   OBJECT
