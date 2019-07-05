@@ -147,6 +147,7 @@ public:
                    iir::StencilInstantiation* instantiation,
                    const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
                    const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
+  // TODO iir_restructuring append AST
   // TODO iir_restructuring implement
   // insertStatements (in any position) with iterators
   /// @brief inserts a statement (pointed by the input iterator) and its accesses info at the end of
