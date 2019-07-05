@@ -30,8 +30,7 @@ yoda_add_library(
           Accesses.h
           AccessToNameMapper.cpp
           AccessToNameMapper.h
-          BlockStatements.cpp
-          BlockStatements.h
+          StatementAccessesPairIterator.h
           Cache.cpp
           Cache.h
           ControlFlowDescriptor.cpp

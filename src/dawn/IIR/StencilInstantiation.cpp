@@ -29,6 +29,7 @@
 #include "dawn/Support/Casting.h"
 #include "dawn/Support/FileUtil.h"
 #include "dawn/Support/Format.h"
+#include "dawn/Support/IteratorRange.h"
 #include "dawn/Support/Json.h"
 #include "dawn/Support/Logging.h"
 #include "dawn/Support/Printing.h"
@@ -159,8 +160,11 @@ int StencilInstantiation::createVersionAndRename(int AccessID, Stencil* stencil,
   renameAccessIDInExpr(this, AccessID, newAccessID, expr);
 
   // Recompute the accesses of the current statement (only works with single Do-Methods - for now)
-  computeAccesses(this,
-                  stencil->getStage(curStageIdx)->getSingleDoMethod().getChildren()[curStmtIdx]);
+  auto& singleDoMethod = stencil->getStage(curStageIdx)->getSingleDoMethod();
+
+  computeAccesses(
+      this, singleDoMethod.getASTStmtToSAPMap(),
+      iir::DoMethod::SAPRange(std::next(singleDoMethod.sapBegin().clone(), curStmtIdx)));
 
   // Rename the statement and accesses
   for(int stageIdx = curStageIdx;
@@ -171,15 +175,19 @@ int StencilInstantiation::createVersionAndRename(int AccessID, Stencil* stencil,
 
     if(stageIdx == curStageIdx) {
       for(int i = dir == RD_Above ? (curStmtIdx - 1) : (curStmtIdx + 1);
-          dir == RD_Above ? (i >= 0) : (i < doMethod.getChildren().size());
+          dir == RD_Above ? (i >= 0) : (i < doMethod.getStmts().size());
           dir == RD_Above ? (--i) : (++i)) {
-        renameAccessIDInStmts(&metadata_, AccessID, newAccessID, doMethod.getChildren()[i]);
-        renameAccessIDInAccesses(&metadata_, AccessID, newAccessID, doMethod.getChildren()[i]);
+        renameAccessIDInStmts(
+            &metadata_, AccessID, newAccessID,
+            iir::DoMethod::StmtsRange(std::next(doMethod.stmtsBegin().clone(), i)));
+        renameAccessIDInAccesses(
+            &metadata_, AccessID, newAccessID,
+            iir::DoMethod::SAPRange(std::next(doMethod.sapBegin().clone(), i)));
       }
 
     } else {
-      renameAccessIDInStmts(&metadata_, AccessID, newAccessID, doMethod.getChildren());
-      renameAccessIDInAccesses(&metadata_, AccessID, newAccessID, doMethod.getChildren());
+      renameAccessIDInStmts(&metadata_, AccessID, newAccessID, doMethod.stmtsRange());
+      renameAccessIDInAccesses(&metadata_, AccessID, newAccessID, doMethod.sapRange());
     }
 
     // Update the fields of the doMethod and stage levels
@@ -220,20 +228,19 @@ void StencilInstantiation::promoteLocalVariableToTemporaryField(Stencil* stencil
 
   // Replace all variable accesses with field accesses
   stencil->forEachStatementAccessesPair(
-      [&](ArrayRef<std::unique_ptr<StatementAccessesPair>> statementAccessesPair) -> void {
+      [&](IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) -> void {
         replaceVarWithFieldAccessInStmts(metadata_, stencil, accessID, fieldname,
-                                         statementAccessesPair);
+                                         statementAccessesPairs.clone());
       },
       lifetime);
 
   // Replace the the variable declaration with an assignment to the temporary field
-  const std::vector<std::unique_ptr<StatementAccessesPair>>& statementAccessesPairs =
-      stencil->getStage(lifetime.Begin.StagePos)
-          ->getChildren()
-          .at(lifetime.Begin.DoMethodIndex)
-          ->getChildren();
+  const DoMethod::SAPRange statementAccessesPairs = stencil->getStage(lifetime.Begin.StagePos)
+                                                        ->getChildren()
+                                                        .at(lifetime.Begin.DoMethodIndex)
+                                                        ->sapRange();
   std::shared_ptr<Statement> oldStatement =
-      statementAccessesPairs[lifetime.Begin.StatementIndex]->getStatement();
+      statementAccessesPairs[lifetime.Begin.StatementIndex].getStatement();
 
   // The oldStmt has to be a `VarDeclStmt`. For example
   //
@@ -264,7 +271,7 @@ void StencilInstantiation::promoteLocalVariableToTemporaryField(Stencil* stencil
     auto exprStmt = std::make_shared<ExprStmt>(assignmentExpr);
 
     // Replace the statement
-    statementAccessesPairs[lifetime.Begin.StatementIndex]->setStatement(
+    statementAccessesPairs[lifetime.Begin.StatementIndex].setStatement(
         std::make_shared<Statement>(exprStmt, oldStatement->StackTrace));
 
     // Remove the variable
@@ -291,20 +298,19 @@ void StencilInstantiation::demoteTemporaryFieldToLocalVariable(Stencil* stencil,
 
   // Replace all field accesses with variable accesses
   stencil->forEachStatementAccessesPair(
-      [&](ArrayRef<std::unique_ptr<StatementAccessesPair>> statementAccessesPairs) -> void {
+      [&](IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) -> void {
         replaceFieldWithVarAccessInStmts(metadata_, stencil, AccessID, varname,
-                                         statementAccessesPairs);
+                                         statementAccessesPairs.clone());
       },
       lifetime);
 
   // Replace the first access to the field with a VarDeclStmt
-  const std::vector<std::unique_ptr<StatementAccessesPair>>& statementAccessesPairs =
-      stencil->getStage(lifetime.Begin.StagePos)
-          ->getChildren()
-          .at(lifetime.Begin.DoMethodIndex)
-          ->getChildren();
+  const DoMethod::SAPRange statementAccessesPairs = stencil->getStage(lifetime.Begin.StagePos)
+                                                        ->getChildren()
+                                                        .at(lifetime.Begin.DoMethodIndex)
+                                                        ->sapRange();
   std::shared_ptr<Statement> oldStatement =
-      statementAccessesPairs[lifetime.Begin.StatementIndex]->getStatement();
+      statementAccessesPairs[lifetime.Begin.StatementIndex].getStatement();
 
   // The oldStmt has to be an `ExprStmt` with an `AssignmentExpr`. For example
   //
@@ -326,7 +332,7 @@ void StencilInstantiation::demoteTemporaryFieldToLocalVariable(Stencil* stencil,
                                     std::vector<std::shared_ptr<Expr>>{assignmentExpr->getRight()});
 
   // Replace the statement
-  statementAccessesPairs[lifetime.Begin.StatementIndex]->setStatement(
+  statementAccessesPairs[lifetime.Begin.StatementIndex].setStatement(
       std::make_shared<Statement>(varDeclStmt, oldStatement->StackTrace));
 
   // Remove the field
@@ -429,11 +435,12 @@ StencilInstantiation::getOriginalNameAndLocationsFromAccessID(
 
 std::string StencilInstantiation::getOriginalNameFromAccessID(int AccessID) const {
   OriginalNameGetter orignalNameGetter(metadata_, AccessID, true);
-
-  for(const auto& stmtAccessesPair : iterateIIROver<StatementAccessesPair>(*getIIR())) {
-    stmtAccessesPair->getStatement()->ASTStmt->accept(orignalNameGetter);
-    if(orignalNameGetter.hasName())
-      return orignalNameGetter.getName();
+  for(const auto& doMethod : iterateIIROver<DoMethod>(*getIIR())) {
+    for(const auto& stmtAccessesPair : doMethod->sapRange()) {
+      stmtAccessesPair.getStatement()->ASTStmt->accept(orignalNameGetter);
+      if(orignalNameGetter.hasName())
+        return orignalNameGetter.getName();
+    }
   }
 
   // Best we can do...
@@ -461,23 +468,24 @@ void StencilInstantiation::jsonDump(std::string filename) const {
 void StencilInstantiation::reportAccesses() const {
   // Stencil functions
   for(const auto& stencilFun : metadata_.getStencilFunctionInstantiations()) {
-    const auto& statementAccessesPairs = stencilFun->getStatementAccessesPairs();
-
-    for(std::size_t i = 0; i < statementAccessesPairs.size(); ++i) {
+    auto statementAccessesPairs = stencilFun->getStatementAccessesPairs();
+    std::size_t i = 0;
+    for(const auto& statementAccessesPair : statementAccessesPairs) {
       std::cout << "\nACCESSES: line "
-                << statementAccessesPairs[i]->getStatement()->ASTStmt->getSourceLocation().Line
-                << ": "
-                << statementAccessesPairs[i]->getCalleeAccesses()->reportAccesses(stencilFun.get())
+                << statementAccessesPair.getStatement()->ASTStmt->getSourceLocation().Line << ": "
+                << statementAccessesPair.getCalleeAccesses()->reportAccesses(stencilFun.get())
                 << "\n";
+      ++i;
     }
   }
 
   // Stages
-
-  for(const auto& stmtAccessesPair : iterateIIROver<StatementAccessesPair>(*getIIR())) {
-    std::cout << "\nACCESSES: line "
-              << stmtAccessesPair->getStatement()->ASTStmt->getSourceLocation().Line << ": "
-              << stmtAccessesPair->getAccesses()->reportAccesses(metadata_) << "\n";
+  for(const auto& doMethod : iterateIIROver<DoMethod>(*getIIR())) {
+    for(const auto& stmtAccessesPair : doMethod->sapRange()) {
+      std::cout << "\nACCESSES: line "
+                << stmtAccessesPair.getStatement()->ASTStmt->getSourceLocation().Line << ": "
+                << stmtAccessesPair.getAccesses()->reportAccesses(metadata_) << "\n";
+    }
   }
 }
 

@@ -29,14 +29,15 @@ namespace {
 /// @brief Compute and fill the access map of the given statement
 class AccessMapper : public ASTVisitor {
   const iir::StencilMetaInformation& metadata_;
+  const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap_;
 
   /// Keep track of the current statement access pair
   struct CurrentStatementAccessPair {
-    CurrentStatementAccessPair(const std::unique_ptr<iir::StatementAccessesPair>& pair)
+    CurrentStatementAccessPair(iir::StatementAccessesPair& pair)
         : Pair(pair), ChildIndex(0), IfCondExpr(nullptr) {}
 
     /// Reference to the pair we are currently working on.
-    const std::unique_ptr<iir::StatementAccessesPair>& Pair;
+    iir::StatementAccessesPair& Pair;
 
     /// Index of the child we are currently traversing. We need to keep track of this index because
     /// we fold the two block statements of an if/then/else block into a single vector of statements
@@ -73,9 +74,10 @@ class AccessMapper : public ASTVisitor {
 
 public:
   AccessMapper(const iir::StencilMetaInformation& metadata,
-               const std::unique_ptr<iir::StatementAccessesPair>& stmtAccessesPair,
+               const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+               iir::StatementAccessesPair& stmtAccessesPair,
                std::shared_ptr<iir::StencilFunctionInstantiation> stencilFun = nullptr)
-      : metadata_(metadata), stencilFun_(stencilFun) {
+      : metadata_(metadata), astStmtToSAPMap_(astStmtToSAPMap), stencilFun_(stencilFun) {
     curStatementAccessPairStack_.push_back(
         make_unique<CurrentStatementAccessPair>(stmtAccessesPair));
   }
@@ -103,15 +105,14 @@ public:
   /// accesses list. This will also add accesses to the children of the top-level statement access
   /// pair
   void appendNewAccesses() {
-    curStatementAccessPairStack_.back()->Pair->setCallerAccesses(std::make_shared<iir::Accesses>());
-    callerAccessesList_.emplace_back(
-        curStatementAccessPairStack_.back()->Pair->getCallerAccesses());
+    curStatementAccessPairStack_.back()->Pair.setCallerAccesses(std::make_shared<iir::Accesses>());
+    callerAccessesList_.emplace_back(curStatementAccessPairStack_.back()->Pair.getCallerAccesses());
 
     if(stencilFun_) {
-      curStatementAccessPairStack_.back()->Pair->setCalleeAccesses(
+      curStatementAccessPairStack_.back()->Pair.setCalleeAccesses(
           std::make_shared<iir::Accesses>());
       calleeAccessesList_.emplace_back(
-          curStatementAccessPairStack_.back()->Pair->getCalleeAccesses());
+          curStatementAccessPairStack_.back()->Pair.getCalleeAccesses());
     }
 
     // Add all accesses of all parent if-cond expressions
@@ -255,17 +256,17 @@ public:
     // one single
     // vector of block statements
     if(!curStatementAccessPairStack_.back()->IfCondExpr)
-      curStatementAccessPairStack_.back()->ChildIndex = 0;
+      curStatementAccessPairStack_.back()->ChildIndex = 1; // Skipping the If-Cond
 
     for(auto& s : stmt->getStatements()) {
 
       DAWN_ASSERT(!curStatementAccessPairStack_.empty());
 
       const auto& curStmt = curStatementAccessPairStack_.back();
-      DAWN_ASSERT(curStmt->Pair->hasBlockStatements());
+      DAWN_ASSERT(curStmt->Pair.hasBlockStatements());
 
       auto curBlockStmt = make_unique<CurrentStatementAccessPair>(
-          curStmt->Pair->getBlockStatements()[curStmt->ChildIndex]);
+          curStmt->Pair.getBlockStatementAccessesPairs(astStmtToSAPMap_)[curStmt->ChildIndex]);
 
       curStatementAccessPairStack_.push_back(std::move(curBlockStmt));
 
@@ -345,7 +346,10 @@ public:
 
     std::shared_ptr<iir::StencilFunctionInstantiation> curStencilFunCall =
         stencilFunCalls_.top()->FunctionInstantiation;
-    computeAccesses(curStencilFunCall, curStencilFunCall->getStatementAccessesPairs());
+
+    // Compute accesses of function
+    computeAccesses(curStencilFunCall, curStencilFunCall->getDoMethod()->getASTStmtToSAPMap(),
+                    curStencilFunCall->getStatementAccessesPairs());
 
     // Compute the fields to get the IOPolicy of the arguments
     curStencilFunCall->update();
@@ -467,21 +471,29 @@ public:
 } // anonymous namespace
 
 void computeAccesses(iir::StencilInstantiation* instantiation,
-                     ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs) {
-  for(const auto& statementAccessesPair : statementAccessesPairs) {
-    DAWN_ASSERT(instantiation);
-    AccessMapper mapper(instantiation->getMetaData(), statementAccessesPair, nullptr);
-    statementAccessesPair->getStatement()->ASTStmt->accept(mapper);
-  }
+                     const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+                     iir::DoMethod::SAPRange statementAccessesPairs) {
+  DAWN_ASSERT(instantiation);
+  computeAccesses(instantiation->getMetaData(), astStmtToSAPMap, std::move(statementAccessesPairs));
 }
 
 void computeAccesses(
     std::shared_ptr<iir::StencilFunctionInstantiation> stencilFunctionInstantiation,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs) {
-  for(const auto& statementAccessesPair : statementAccessesPairs) {
+    const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+    iir::DoMethod::SAPRange statementAccessesPairs) {
+  for(auto& statementAccessesPair : statementAccessesPairs) {
     AccessMapper mapper(stencilFunctionInstantiation->getStencilInstantiation()->getMetaData(),
-                        statementAccessesPair, stencilFunctionInstantiation);
-    statementAccessesPair->getStatement()->ASTStmt->accept(mapper);
+                        astStmtToSAPMap, statementAccessesPair, stencilFunctionInstantiation);
+    statementAccessesPair.getStatement()->ASTStmt->accept(mapper);
+  }
+}
+
+void computeAccesses(const iir::StencilMetaInformation& metadata,
+                     const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+                     iir::DoMethod::SAPRange statementAccessesPairs) {
+  for(auto& statementAccessesPair : statementAccessesPairs) {
+    AccessMapper mapper(metadata, astStmtToSAPMap, statementAccessesPair, nullptr);
+    statementAccessesPair.getStatement()->ASTStmt->accept(mapper);
   }
 }
 

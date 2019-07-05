@@ -109,42 +109,42 @@ bool PassTemporaryType::run(const std::shared_ptr<iir::StencilInstantiation>& in
     AccessIDs.clear();
 
     // Loop over all accesses
-    for(const auto& statementAccessesPair :
-        iterateIIROver<iir::StatementAccessesPair>(*stencilPtr)) {
-      auto processAccessMap = [&](const std::unordered_map<int, iir::Extents>& accessMap) {
-        for(const auto& AccessIDExtentPair : accessMap) {
-          int AccessID = AccessIDExtentPair.first;
-          const iir::Extents& extent = AccessIDExtentPair.second;
+    for(const auto& doMethod : iterateIIROver<iir::DoMethod>(*stencilPtr))
+      for(const auto& statementAccessesPair : doMethod->sapRange()) {
+        auto processAccessMap = [&](const std::unordered_map<int, iir::Extents>& accessMap) {
+          for(const auto& AccessIDExtentPair : accessMap) {
+            int AccessID = AccessIDExtentPair.first;
+            const iir::Extents& extent = AccessIDExtentPair.second;
 
-          // Is it a temporary?
-          bool isTemporaryField =
-              metadata.isAccessType(iir::FieldAccessType::FAT_StencilTemporary, AccessID);
-          if(isTemporaryField ||
-             (!metadata.isAccessType(iir::FieldAccessType::FAT_GlobalVariable, AccessID) &&
-              metadata.isAccessType(iir::FieldAccessType::FAT_LocalVariable, AccessID))) {
+            // Is it a temporary?
+            bool isTemporaryField =
+                metadata.isAccessType(iir::FieldAccessType::FAT_StencilTemporary, AccessID);
+            if(isTemporaryField ||
+               (!metadata.isAccessType(iir::FieldAccessType::FAT_GlobalVariable, AccessID) &&
+                metadata.isAccessType(iir::FieldAccessType::FAT_LocalVariable, AccessID))) {
 
-            auto it = temporaries.find(AccessID);
-            if(it != temporaries.end()) {
-              // If we already registered it, update the extent
-              it->second.extent_.merge(extent);
-            } else {
-              // Register the temporary
-              AccessIDs.insert(AccessID);
-              iir::TemporaryScope ttype =
-                  instantiation->isIDAccessedMultipleStencils(AccessID)
-                      ? iir::TemporaryScope::TS_Field
-                      : (isTemporaryField ? iir::TemporaryScope::TS_StencilTemporary
-                                          : iir::TemporaryScope::TS_LocalVariable);
+              auto it = temporaries.find(AccessID);
+              if(it != temporaries.end()) {
+                // If we already registered it, update the extent
+                it->second.extent_.merge(extent);
+              } else {
+                // Register the temporary
+                AccessIDs.insert(AccessID);
+                iir::TemporaryScope ttype =
+                    instantiation->isIDAccessedMultipleStencils(AccessID)
+                        ? iir::TemporaryScope::TS_Field
+                        : (isTemporaryField ? iir::TemporaryScope::TS_StencilTemporary
+                                            : iir::TemporaryScope::TS_LocalVariable);
 
-              temporaries.emplace(AccessID, Temporary(AccessID, ttype, extent));
+                temporaries.emplace(AccessID, Temporary(AccessID, ttype, extent));
+              }
             }
           }
-        }
-      };
+        };
 
-      processAccessMap(statementAccessesPair->getAccesses()->getWriteAccesses());
-      processAccessMap(statementAccessesPair->getAccesses()->getReadAccesses());
-    }
+        processAccessMap(statementAccessesPair.getAccesses()->getWriteAccesses());
+        processAccessMap(statementAccessesPair.getAccesses()->getReadAccesses());
+      }
 
     auto LifetimeMap = stencilPtr->getLifetime(AccessIDs);
     std::for_each(LifetimeMap.begin(), LifetimeMap.end(),

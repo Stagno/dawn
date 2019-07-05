@@ -73,6 +73,7 @@ protected:
 
 public:
   using ParentType = Parent;
+  using ThisType = NodeType;
   using ChildType = Child;
   using ChildSmartPtrType = SmartPtr<Child>;
   using ChildrenContainer = Container<SmartPtr<Child>>;

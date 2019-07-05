@@ -350,6 +350,7 @@ public:
     // Note that we may need to operate on copies of the ASTs because we want to have a *unique*
     // mapping of AST nodes to AccessIDs, hence we clone the ASTs of the vertical regions of
     // stencil calls
+    // TODO: why not clone everytime?
     bool cloneAST = scope_.size() > 1;
     std::shared_ptr<AST> ast = cloneAST ? verticalRegion->Ast->clone() : verticalRegion->Ast;
 
@@ -358,29 +359,16 @@ public:
         metadata_, verticalRegion->LoopOrder == sir::VerticalRegion::LK_Forward
                        ? LoopOrderKind::LK_Forward
                        : LoopOrderKind::LK_Backward);
-    std::unique_ptr<Stage> stage =
-        make_unique<Stage>(metadata_, instantiation_->nextUID(), interval);
-
+    std::unique_ptr<Stage> stage = make_unique<Stage>(metadata_, instantiation_->nextUID());
     DAWN_LOG(INFO) << "Processing vertical region at " << verticalRegion->Loc;
-
-    // Here we convert the AST of the vertical region to a flat list of statements of the stage.
-    // Further, we instantiate all referenced stencil functions.
-    DAWN_LOG(INFO) << "Inserting statements ... ";
-    DoMethod& doMethod = stage->getSingleDoMethod();
-    // TODO move iterators of IIRNode to const getChildren, when we pass here begin, end instead
-
-    StatementMapper statementMapper(sir_, instantiation_.get(), scope_.top()->StackTrace, doMethod,
-                                    doMethod.getInterval(),
-                                    scope_.top()->LocalFieldnameToAccessIDMap, nullptr);
-    ast->accept(statementMapper);
-    DAWN_LOG(INFO) << "Inserted " << doMethod.getChildren().size() << " statements";
+    stage->insertChild(make_unique<DoMethod>(interval, metadata_, ast, sir_, instantiation_.get(),
+                                             scope_.top()->StackTrace,
+                                             scope_.top()->LocalFieldnameToAccessIDMap));
+    // old_TODO: move iterators of IIRNode to const getChildren, when we pass here begin, end
+    // instead
 
     if(instantiation_->getOptimizerContext()->getDiagnostics().hasErrors())
       return;
-    // Here we compute the *actual* access of each statement and associate access to the AccessIDs
-    // we set previously.
-    DAWN_LOG(INFO) << "Filling accesses ...";
-    computeAccesses(instantiation_.get(), doMethod.getChildren());
 
     // Now, we compute the fields of each stage (this will give us the IO-Policy of the fields)
     stage->update(iir::NodeUpdateType::level);

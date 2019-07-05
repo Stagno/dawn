@@ -22,6 +22,7 @@
 #include "dawn/IIR/StencilMetaInformation.h"
 #include "dawn/Optimizer/AccessUtils.h"
 #include "dawn/SIR/ASTVisitor.h"
+#include "dawn/Support/IteratorRange.h"
 #include "dawn/Support/Logging.h"
 #include <algorithm>
 #include <iterator>
@@ -33,11 +34,6 @@ namespace iir {
 
 Stage::Stage(const StencilMetaInformation& metaData, int StageID)
     : metaData_(metaData), StageID_(StageID) {}
-
-Stage::Stage(const StencilMetaInformation& metaData, int StageID, const Interval& interval)
-    : metaData_(metaData), StageID_(StageID) {
-  insertChild(make_unique<DoMethod>(interval, metaData));
-}
 
 json::json Stage::jsonDump(const StencilMetaInformation& metaData) const {
   json::json node;
@@ -209,8 +205,8 @@ void Stage::updateGlobalVariablesInfo() {
 
   for(const auto& doMethodPtr : getChildren()) {
     const DoMethod& doMethod = *doMethodPtr;
-    for(const auto& statementAccessesPair : doMethod.getChildren()) {
-      const auto& access = statementAccessesPair->getAccesses();
+    for(const auto& statementAccessesPair : doMethod.sapRange()) {
+      const auto& access = statementAccessesPair.getAccesses();
       DAWN_ASSERT(access);
       for(const auto& accessPair : access->getWriteAccesses()) {
         int AccessID = accessPair.first;
@@ -226,7 +222,7 @@ void Stage::updateGlobalVariablesInfo() {
         }
       }
 
-      const std::shared_ptr<Statement> statement = statementAccessesPair->getStatement();
+      const std::shared_ptr<Statement> statement = statementAccessesPair.getStatement();
       DAWN_ASSERT(statement);
       DAWN_ASSERT(statement->ASTStmt);
 
@@ -277,8 +273,9 @@ void Stage::appendDoMethod(DoMethodSmartPtr_t& from, DoMethodSmartPtr_t& to,
                   "DoMethods have incompatible intervals!");
 
   to->setDependencyGraph(dependencyGraph);
-  to->insertChildren(to->childrenEnd(), std::make_move_iterator(from->childrenBegin()),
-                     std::make_move_iterator(from->childrenEnd()));
+  to->appendStatements(from->sapRange());
+  // TODO  iir_restructuring : this method used to std::move SAPs from 'from' to 'to' by using a
+  // move_iterator, is this the intended behavior? Also this method is never used!
 }
 
 std::vector<std::unique_ptr<Stage>>
@@ -287,37 +284,41 @@ Stage::split(std::deque<int>& splitterIndices,
   DAWN_ASSERT_MSG(hasSingleDoMethod(), "Stage::split does not support multiple Do-Methods");
   DoMethod& thisDoMethod = getSingleDoMethod();
 
-  DAWN_ASSERT(thisDoMethod.getChildren().size() >= 2);
+  DAWN_ASSERT(thisDoMethod.getStmts().size() >= 2);
   DAWN_ASSERT(!graphs || splitterIndices.size() == graphs->size() - 1);
 
   std::vector<std::unique_ptr<Stage>> newStages;
 
-  splitterIndices.push_back(thisDoMethod.getChildren().size() - 1);
-  DoMethod::StatementAccessesIterator prevSplitterIndex = thisDoMethod.childrenBegin();
+  splitterIndices.push_back(thisDoMethod.getStmts().size() - 1);
+  DoMethod::StmtsConstIterator prevSplitterIndex = thisDoMethod.stmtsBegin().clone();
 
   // Create new stages
   for(std::size_t i = 0; i < splitterIndices.size(); ++i) {
-    DoMethod::StatementAccessesIterator nextSplitterIndex =
-        std::next(thisDoMethod.childrenBegin(), splitterIndices[i] + 1);
+    DoMethod::StmtsConstIterator nextSplitterIndex =
+        std::next(thisDoMethod.stmtsBegin().clone(), splitterIndices[i] + 1);
 
-    newStages.push_back(make_unique<Stage>(metaData_, UIDGenerator::getInstance()->get(),
-                                           thisDoMethod.getInterval()));
+    newStages.push_back(make_unique<Stage>(metaData_, UIDGenerator::getInstance()->get()));
     Stage& newStage = *newStages.back();
+    newStage.insertChild(make_unique<DoMethod>(thisDoMethod.getInterval(), metaData_));
     DoMethod& doMethod = newStage.getSingleDoMethod();
 
     if(graphs)
       doMethod.setDependencyGraph((*graphs)[i]);
 
     // The new stage contains the statements in the range [prevSplitterIndex , nextSplitterIndex)
-    for(auto it = prevSplitterIndex; it != nextSplitterIndex; ++it) {
-      doMethod.insertChild(std::move(*it));
-    }
+    // TODO: check correctness!
+    // TODO  iir_restructuring : this code used to std::move *it to the new doMethod... is this the
+    // intended behavior?
+    auto range = IteratorRange<DoMethod::SAPConstIterator>(
+        DoMethod::SAPConstIterator(prevSplitterIndex, thisDoMethod.getASTStmtToSAPMap()),
+        DoMethod::SAPConstIterator(nextSplitterIndex, thisDoMethod.getASTStmtToSAPMap()));
+    doMethod.appendStatements(std::move(range));
 
     // Update the fields of the new doMethod
     doMethod.update(NodeUpdateType::level);
     newStage.update(NodeUpdateType::level);
 
-    prevSplitterIndex = nextSplitterIndex;
+    prevSplitterIndex = std::move(nextSplitterIndex);
   }
 
   return newStages;

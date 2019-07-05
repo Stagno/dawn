@@ -17,32 +17,39 @@
 
 #include "dawn/IIR/AccessToNameMapper.h"
 #include "dawn/IIR/Accesses.h"
-#include "dawn/IIR/BlockStatements.h"
 #include "dawn/IIR/IIRNode.h"
+#include "dawn/SIR/ASTNodeIterator.h"
 #include "dawn/SIR/Statement.h"
 #include <boost/optional.hpp>
 #include <memory>
 #include <vector>
 
 namespace dawn {
+
+template <class ASTRootNode, bool onlyFirstLevel>
+class StatementAccessesPairIterator;
+
+template <typename ASTRootNode, bool onlyFirstLevel>
+class StatementAccessesPairRange;
+
 namespace iir {
 
-class DoMethod;
 class StencilMetaInformation;
 
 /// @brief Statement with corresponding Accesses
 ///
-/// If the statement is a block-statement, the sub-statements will be stored in blockStatements.
+/// If the statement is an If or Block statement, an iterator range through the sub-statements can
+/// be retrieved through getBlockStatements() / getBlockStatementAccessesPairs()
 /// @ingroup optimizer
-class StatementAccessesPair : public IIRNode<DoMethod, StatementAccessesPair, void> {
+class StatementAccessesPair {
 
   std::shared_ptr<Statement> statement_;
 
   // In case of a non function call stmt, the accesses are stored in callerAccesses_, while
   // calleeAccesses_ will be nullptr
 
-  // Accesses of the statement. If the statement is part of a stencil-function, this will store the
-  // caller accesses. The caller access will have the initial offset added (e.g if a stencil
+  // Accesses of the statement. If the statement is part of a stencil-function, this will store
+  // the caller accesses. The caller access will have the initial offset added (e.g if a stencil
   // function is called with `avg(u(i+1))` the initial offset of `u` is `[1, 0, 0]`).
   std::shared_ptr<Accesses> callerAccesses_;
 
@@ -50,18 +57,17 @@ class StatementAccessesPair : public IIRNode<DoMethod, StatementAccessesPair, vo
   // accesses without the initial offset of the call
   std::shared_ptr<Accesses> calleeAccesses_;
 
-  // If the statement is a block statement, this will contain the sub-statements of the block. Note
-  // that the acceses in this case are the *accumulated* accesses of all sub-statements.
-  BlockStatements blockStatements_;
-
 public:
   static constexpr const char* name = "StatementAccessesPair";
 
-  inline virtual void updateFromChildren() override {}
+  using ASTStmtToSAPMapType = std::unordered_map<const Stmt*, StatementAccessesPair>;
 
   explicit StatementAccessesPair(const std::shared_ptr<Statement>& statement);
 
   StatementAccessesPair(StatementAccessesPair&&) = default;
+  StatementAccessesPair(const StatementAccessesPair&);
+  StatementAccessesPair& operator=(StatementAccessesPair&&) = default;
+  StatementAccessesPair& operator=(const StatementAccessesPair&);
 
   /// @brief clone the statement accesses pair, returning a smart ptr
   std::unique_ptr<StatementAccessesPair> clone() const;
@@ -83,19 +89,25 @@ public:
   void setCalleeAccesses(const std::shared_ptr<Accesses>& accesses);
   bool hasCalleeAccesses();
 
-  /// @brief Get the blockStatements
-  const std::vector<std::unique_ptr<StatementAccessesPair>>& getBlockStatements() const;
+  /// @brief Get the AST statements inside the block (only one level deep). IfStmt gives
+  /// a concatenation of the condition statement, the then and else blocks.
+  ASTRange<Stmt, true> getBlockStatements() const;
+  /// @brief Get the AST StatementAccessesPairs of the statements inside the block (only one level
+  /// deep). IfStmt gives a concatenation of the condition statement, the then and else blocks.
+  StatementAccessesPairRange<Stmt, true>
+  getBlockStatementAccessesPairs(const ASTStmtToSAPMapType& astStmtToSAPMap) const;
   bool hasBlockStatements() const;
 
-  /// @brief insert a new statemenent accesses pair as a block statement
-  void insertBlockStatement(std::unique_ptr<StatementAccessesPair>&& stmt);
-
-  boost::optional<Extents> computeMaximumExtents(const int accessID) const;
+  boost::optional<Extents> computeMaximumExtents(const int accessID,
+                                                 const ASTStmtToSAPMapType& astStmtToSAPMap) const;
 
   /// @brief Convert the StatementAccessesPair of a stencil or stencil-function to string
   /// @{
-  std::string toString(const StencilMetaInformation* metadata, std::size_t initialIndent = 0) const;
+  std::string toString(const StencilMetaInformation* metadata,
+                       const ASTStmtToSAPMapType& astStmtToSAPMap,
+                       std::size_t initialIndent = 0) const;
   std::string toString(const StencilFunctionInstantiation* stencilFunc,
+                       const ASTStmtToSAPMapType& astStmtToSAPMap,
                        std::size_t initialIndent = 0) const;
   /// @}
 

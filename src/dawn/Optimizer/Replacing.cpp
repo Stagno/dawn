@@ -65,13 +65,13 @@ public:
 void replaceFieldWithVarAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& varname,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs) {
+    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) {
 
   GetFieldAndVarAccesses visitor(metadata, AccessID);
   for(const auto& statementAccessesPair : statementAccessesPairs) {
     visitor.reset();
 
-    const auto& stmt = statementAccessesPair->getStatement()->ASTStmt;
+    const auto& stmt = statementAccessesPair.getStatement()->ASTStmt;
     stmt->accept(visitor);
 
     for(auto& oldExpr : visitor.getFieldAccessExprToReplace()) {
@@ -88,13 +88,13 @@ void replaceFieldWithVarAccessInStmts(
 void replaceVarWithFieldAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& fieldname,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs) {
+    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) {
 
   GetFieldAndVarAccesses visitor(metadata, AccessID);
   for(const auto& statementAccessesPair : statementAccessesPairs) {
     visitor.reset();
 
-    const auto& stmt = statementAccessesPair->getStatement()->ASTStmt;
+    const auto& stmt = statementAccessesPair.getStatement()->ASTStmt;
     stmt->accept(visitor);
 
     for(auto& oldExpr : visitor.getVarAccessesToReplace()) {

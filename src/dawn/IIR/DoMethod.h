@@ -18,6 +18,10 @@
 #include "dawn/IIR/Field.h"
 #include "dawn/IIR/IIRNode.h"
 #include "dawn/IIR/Interval.h"
+#include "dawn/IIR/StatementAccessesPair.h"
+#include "dawn/IIR/StatementAccessesPairIterator.h"
+#include "dawn/SIR/ASTNodeIterator.h"
+#include "dawn/Support/IteratorRange.h"
 #include <boost/optional.hpp>
 #include <memory>
 #include <vector>
@@ -27,42 +31,42 @@ namespace iir {
 
 class Stage;
 class DependencyGraphAccesses;
-class StatementAccessesPair;
 class StencilMetaInformation;
 
 /// @brief A Do-method is a collection of Statements with corresponding Accesses of a specific
 /// vertical region
 ///
 /// @ingroup optimizer
-class DoMethod : public IIRNode<Stage, DoMethod, StatementAccessesPair> {
-  Interval interval_;
-  long unsigned int id_;
-
-  struct DerivedInfo {
-    DerivedInfo() : dependencyGraph_(nullptr) {}
-    DerivedInfo(DerivedInfo&&) = default;
-    DerivedInfo(const DerivedInfo&) = default;
-    DerivedInfo& operator=(DerivedInfo&&) = default;
-    DerivedInfo& operator=(const DerivedInfo&) = default;
-
-    void clear();
-
-    /// Declaration of the fields of this doMethod
-    std::unordered_map<int, Field> fields_;
-    std::shared_ptr<DependencyGraphAccesses> dependencyGraph_;
-  };
-
-  const StencilMetaInformation& metaData_;
-  DerivedInfo derivedInfo_;
+class DoMethod : public IIRNode<Stage, DoMethod, void> {
 
 public:
   static constexpr const char* name = "DoMethod";
 
-  using StatementAccessesIterator = ChildIterator;
+  using ASTStmtToSAPMapType = std::unordered_map<const Stmt*, StatementAccessesPair>;
+  using FullASTConstIterator = ASTNodeIterator<Stmt, false>;
+  using FullASTRange = ASTRange<Stmt, false>;
+  using StmtsConstIterator = ASTNodeIterator<Stmt, true>;
+  using StmtsRange = ASTRange<Stmt, true>;
+  using SAPConstIterator = StatementAccessesPairIterator<Stmt, true>;
+  using SAPRange = StatementAccessesPairRange<Stmt, true>;
 
   /// @name Constructors and Assignment
   /// @{
+
+  /// @brief Constructor for empty DoMethod
   DoMethod(Interval interval, const StencilMetaInformation& metaData);
+  // TODO iir_restructuring whether the domethod is of a function or of a stencil it should be
+  // transparent here. Need refactoring of StatementMapper!
+  /// @brief Constructor for function's DoMethod
+  DoMethod(Interval interval, const StencilMetaInformation& metaData,
+           const std::shared_ptr<AST> ast);
+  /// @brief Constructor for stencil's DoMethod with AST (also creates necessary AccessIDs and
+  /// computes accesses)
+  DoMethod(Interval interval, const StencilMetaInformation& metaData,
+           const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
+           iir::StencilInstantiation* instantiation,
+           const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
+           const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
   DoMethod(DoMethod&&) = default;
   DoMethod& operator=(DoMethod&&) = default;
   /// @}
@@ -72,20 +76,85 @@ public:
   /// @brief clone the object creating and returning a new unique_ptr
   std::unique_ptr<DoMethod> clone() const;
 
+  /// @name Iterators
+  /// /// @{
+  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
+  /// to root
+  inline FullASTConstIterator const astBegin() const {
+    return FullASTRange(*(ast_->getRoot())).begin();
+  }
+  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
+  /// to the end (after the last statement of the tree)
+  inline FullASTConstIterator const astEnd() const {
+    return FullASTRange(*(ast_->getRoot())).end();
+  }
+  /// @brief returns a depth-first pre-order iterator range through the whole AST of the DoMethod
+  inline FullASTRange astRange() const { return FullASTRange(*(ast_->getRoot())); }
+  /// @brief returns an iterator through the statements of the first level of the AST of the
+  /// DoMethod pointing to the first one
+  inline StmtsConstIterator const stmtsBegin() const {
+    return StmtsRange(*ast_->getRoot()).begin();
+  }
+  /// @brief returns an iterator through the statements of the first level of the AST of the
+  /// DoMethod pointing to the end (after the last statement)
+  inline StmtsConstIterator const stmtsEnd() const { return StmtsRange(*ast_->getRoot()).end(); }
+  /// @brief returns an iterator range through the statements of the first level of the AST of the
+  /// DoMethod
+  inline StmtsRange stmtsRange() const { return StmtsRange(*ast_->getRoot()); }
+  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
+  /// level of the AST of the DoMethod pointing to the first one
+  inline SAPConstIterator const sapBegin() const {
+    return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_).begin();
+  }
+  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
+  /// level of the AST of the DoMethod pointing to the end (after the last statement)
+  inline SAPConstIterator const sapEnd() const {
+    return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_).end();
+  }
+  /// @brief returns an iterator range through the StatementAccessesPairs of the statements of the
+  /// first level of the AST of the DoMethod
+  inline SAPRange sapRange() const { return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_); }
+  /// @}
+
   /// @name Getters
   /// @{
   Interval& getInterval();
   const Interval& getInterval() const;
   inline unsigned long int getID() const { return id_; }
   const std::shared_ptr<DependencyGraphAccesses>& getDependencyGraph() const;
+  inline const std::vector<std::shared_ptr<Stmt>>& getStmts() const {
+    return ast_->getRoot()->getStatements();
+  }
+  /// @brief returns a reference to the internal map from ASTStmt to StatementAccessesPair
+  const ASTStmtToSAPMapType& getASTStmtToSAPMap() const { return ASTStmtToSAPMap_; }
+
+  inline const iir::StatementAccessesPair&
+  getStatementAccessesPairFromStmt(const Stmt* stmt) const {
+    return ASTStmtToSAPMap_.at(stmt);
+  }
   /// @}
 
   /// @name Setters
   /// @{
+
   void setInterval(Interval const& interval);
   void setID(const long unsigned int id) { id_ = id; }
   void setDependencyGraph(const std::shared_ptr<DependencyGraphAccesses>& DG);
   /// @}
+  ///  @brief Fills the DoMethod with the provided AST (also creates necessary AccessIDs and
+  ///  computes accesses)
+  void fillWithAST(const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
+                   iir::StencilInstantiation* instantiation,
+                   const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
+                   const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
+  // TODO iir_restructuring implement
+  // insertStatements (in any position) with iterators
+  /// @brief inserts a statement (pointed by the input iterator) and its accesses info at the end of
+  /// the method
+  void appendStatement(SAPConstIterator sap);
+  /// @brief inserts statements (pointed by the iterator range) and their accessess info at the end
+  /// of the method
+  void appendStatements(IteratorRange<SAPConstIterator> saps);
 
   virtual void clearDerivedInfo() override;
 
@@ -126,9 +195,31 @@ public:
   /// the @b accumulated extent of each field
   virtual void updateLevel() override;
 
-  /// @brief update the derived info from the children (currently no information are propagated,
-  /// therefore the method is empty
-  inline virtual void updateFromChildren() override {}
+private:
+  StmtsConstIterator insertStatementAfterImpl(SAPConstIterator otherSapIt,
+                                              StmtsConstIterator& insertionPointIt);
+
+  Interval interval_;
+  long unsigned int id_;
+
+  struct DerivedInfo {
+    DerivedInfo() : dependencyGraph_(nullptr) {}
+    DerivedInfo(DerivedInfo&&) = default;
+    DerivedInfo(const DerivedInfo&) = default;
+    DerivedInfo& operator=(DerivedInfo&&) = default;
+    DerivedInfo& operator=(const DerivedInfo&) = default;
+
+    void clear();
+
+    /// Declaration of the fields of this doMethod
+    std::unordered_map<int, Field> fields_;
+    std::shared_ptr<DependencyGraphAccesses> dependencyGraph_;
+  };
+
+  const StencilMetaInformation& metaData_;
+  const std::shared_ptr<AST> ast_;
+  ASTStmtToSAPMapType ASTStmtToSAPMap_;
+  DerivedInfo derivedInfo_;
 };
 
 } // namespace iir

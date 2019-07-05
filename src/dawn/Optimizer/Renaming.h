@@ -15,6 +15,8 @@
 #ifndef DAWN_OPTIMIZER_RENAMING_H
 #define DAWN_OPTIMIZER_RENAMING_H
 
+#include "dawn/IIR/DoMethod.h"
+#include "dawn/SIR/ASTStmt.h"
 #include "dawn/Support/ArrayRef.h"
 #include <memory>
 
@@ -42,12 +44,10 @@ class StencilMetaInformation;
 ///
 /// @ingroup optimizer
 /// @{
-void renameAccessIDInStmts(
-    iir::StencilMetaInformation* instantiation, int oldAccessID, int newAccessID,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
-void renameAccessIDInStmts(
-    iir::StencilFunctionInstantiation* instantiation, int oldAccessID, int newAccessID,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+void renameAccessIDInStmts(iir::StencilMetaInformation* instantiation, int oldAccessID,
+                           int newAccessID, iir::DoMethod::StmtsRange stmts);
+void renameAccessIDInStmts(iir::StencilFunctionInstantiation* instantiation, int oldAccessID,
+                           int newAccessID, iir::DoMethod::StmtsRange stmts);
 void renameAccessIDInExpr(iir::StencilInstantiation* instantiation, int oldAccessID,
                           int newAccessID, std::shared_ptr<Expr>& expr);
 /// @}
@@ -62,12 +62,10 @@ void renameAccessIDInExpr(iir::StencilInstantiation* instantiation, int oldAcces
 /// @param statementAccessesPairs       Accesses to update
 ///
 /// @ingroup optimizer
-void renameAccessIDInAccesses(
-    const iir::StencilMetaInformation* metadata, int oldAccessID, int newAccessID,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
-void renameAccessIDInAccesses(
-    iir::StencilFunctionInstantiation* instantiation, int oldAccessID, int newAccessID,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+void renameAccessIDInAccesses(const iir::StencilMetaInformation* metadata, int oldAccessID,
+                              int newAccessID, iir::DoMethod::SAPRange saps);
+void renameAccessIDInAccesses(iir::StencilFunctionInstantiation* instantiation, int oldAccessID,
+                              int newAccessID, iir::DoMethod::SAPRange saps);
 /// @}
 
 } // namespace dawn

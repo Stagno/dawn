@@ -383,7 +383,7 @@ public:
   //===----------------------------------------------------------------------------------------===//
 
   /// @brief Get the statements of the stencil function
-  const std::vector<std::unique_ptr<StatementAccessesPair>>& getStatementAccessesPairs() const;
+  DoMethod::SAPRange getStatementAccessesPairs() const;
 
   /// @brief Update the fields and global variables
   ///

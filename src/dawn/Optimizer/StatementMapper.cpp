@@ -36,42 +36,27 @@ StatementMapper::Scope* StatementMapper::getCurrentCandidateScope() {
 }
 
 void StatementMapper::appendNewStatementAccessesPair(const std::shared_ptr<Stmt>& stmt) {
-
-  if(scope_.top()->ScopeDepth == 1) {
-    // The top-level block statement is collapsed thus we only insert at 1. Note that this works
-    // because all AST have a block statement as root node.
-    scope_.top()->doMethod_.insertChild(
-        make_unique<iir::StatementAccessesPair>(std::make_shared<Statement>(stmt, stackTrace_)));
-    scope_.top()->CurentStmtAccessesPair.push(&(*(scope_.top()->doMethod_.childrenRBegin())));
-
-  } else if(scope_.top()->ScopeDepth > 1) {
-    // We are inside a nested block statement, we add the stmt as a child of the parent statement
-    (*scope_.top()->CurentStmtAccessesPair.top())
-        ->insertBlockStatement(make_unique<iir::StatementAccessesPair>(
-            std::make_shared<Statement>(stmt, stackTrace_)));
-
-    const std::unique_ptr<iir::StatementAccessesPair>& lp =
-        ((*scope_.top()->CurentStmtAccessesPair.top())->getBlockStatements().back());
-
-    scope_.top()->CurentStmtAccessesPair.push(&lp);
-  }
+  // Insert into the map the binding std::shared_ptr<Stmt> (of the visited statement) -> new
+  // StatementAccessesPair
+  scope_.top()->ASTStmtToSAPMap_.emplace(
+      stmt.get(), iir::StatementAccessesPair(std::make_shared<Statement>(stmt, stackTrace_)));
+  // And push the pair into the stack
+  scope_.top()->CurentStmtAccessesPair.push_back(&(scope_.top()->ASTStmtToSAPMap_.at(stmt.get())));
 }
 
 void StatementMapper::removeLastChildStatementAccessesPair() {
-  // The top-level pair is never removed
-  if(scope_.top()->CurentStmtAccessesPair.size() <= 1)
-    return;
-
-  scope_.top()->CurentStmtAccessesPair.pop();
+  scope_.top()->CurentStmtAccessesPair.pop_back();
 }
 
 void StatementMapper::visit(const std::shared_ptr<BlockStmt>& stmt) {
   initializedWithBlockStmt_ = true;
   scope_.top()->ScopeDepth++;
 
+  appendNewStatementAccessesPair(stmt);
   for(const auto& s : stmt->getStatements()) {
     s->accept(*this);
   }
+  removeLastChildStatementAccessesPair();
 
   scope_.top()->ScopeDepth--;
 }
@@ -324,8 +309,11 @@ void StatementMapper::visit(const std::shared_ptr<VarAccessExpr>& expr) {
 
       auto newExpr = std::make_shared<dawn::LiteralAccessExpr>(
           value.toString(), sir::Value::typeToBuiltinTypeID(value.getType()));
+      // TODO: check that this is working as intended (should operate on last visited statement that
+      // is a direct "child" of the DoMethod)
       replaceOldExprWithNewExprInStmt(
-          (*(scope_.top()->doMethod_.childrenRBegin()))->getStatement()->ASTStmt, expr, newExpr);
+          (*(++(scope_.top()->CurentStmtAccessesPair.begin())))->getStatement()->ASTStmt, expr,
+          newExpr);
 
       int AccessID = instantiation_->nextUID();
       metadata_.insertAccessOfType(iir::FieldAccessType::FAT_Literal, AccessID,

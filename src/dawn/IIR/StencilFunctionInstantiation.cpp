@@ -35,7 +35,7 @@ StencilFunctionInstantiation::StencilFunctionInstantiation(
     const Interval& interval, bool isNested)
     : stencilInstantiation_(context), metadata_(context->getMetaData()), expr_(expr),
       function_(function), ast_(ast), interval_(interval), hasReturn_(false), isNested_(isNested),
-      doMethod_(make_unique<DoMethod>(interval, context->getMetaData())) {
+      doMethod_(make_unique<DoMethod>(interval, context->getMetaData(), ast)) {
   DAWN_ASSERT(context);
   DAWN_ASSERT(function);
 }
@@ -275,10 +275,10 @@ void StencilFunctionInstantiation::renameCallerAccessID(int oldAccessID, int new
   replaceKeyInMap(AccessIDToNameMap_, oldAccessID, newAccessID);
 
   // Update statements
-  renameAccessIDInStmts(this, oldAccessID, newAccessID, doMethod_->getChildren());
+  renameAccessIDInStmts(this, oldAccessID, newAccessID, doMethod_->stmtsRange());
 
   // Update accesses
-  renameAccessIDInAccesses(this, oldAccessID, newAccessID, doMethod_->getChildren());
+  renameAccessIDInAccesses(this, oldAccessID, newAccessID, doMethod_->sapRange());
 
   // Recompute the fields
   update();
@@ -413,9 +413,8 @@ bool StencilFunctionInstantiation::hasStencilFunctionInstantiation(
           ExprToStencilFunctionInstantiationMap_.end());
 }
 
-const std::vector<std::unique_ptr<StatementAccessesPair>>&
-StencilFunctionInstantiation::getStatementAccessesPairs() const {
-  return doMethod_->getChildren();
+DoMethod::SAPRange StencilFunctionInstantiation::getStatementAccessesPairs() const {
+  return doMethod_->sapRange();
 }
 
 //===------------------------------------------------------------------------------------------===//
@@ -442,8 +441,8 @@ void StencilFunctionInstantiation::update() {
   std::unordered_map<int, Field> inputFields;
   std::unordered_map<int, Field> outputFields;
 
-  for(const auto& statementAccessesPair : doMethod_->getChildren()) {
-    auto access = statementAccessesPair->getAccesses();
+  for(const auto& statementAccessesPair : doMethod_->sapRange()) {
+    auto access = statementAccessesPair.getAccesses();
     DAWN_ASSERT(access);
 
     for(const auto& accessPair : access->getWriteAccesses()) {
@@ -517,9 +516,9 @@ void StencilFunctionInstantiation::update() {
         AccessIDToFieldMap.insert(std::make_pair(it->getAccessID(), it));
 
       // Accumulate the extents of each field in this stage
-      for(const auto& statementAccessesPair : doMethod_->getChildren()) {
-        const auto& access = callerAccesses ? statementAccessesPair->getCallerAccesses()
-                                            : statementAccessesPair->getCalleeAccesses();
+      for(const auto& statementAccessesPair : doMethod_->sapRange()) {
+        const auto& access = callerAccesses ? statementAccessesPair.getCallerAccesses()
+                                            : statementAccessesPair.getCalleeAccesses();
 
         // first => AccessID, second => Extent
         for(auto& accessPair : access->getWriteAccesses()) {
@@ -657,10 +656,9 @@ void StencilFunctionInstantiation::dump() const {
   for(std::size_t i = 0; i < statements.size(); ++i) {
     std::cout << "\e[1m" << ASTStringifer::toString(statements[i], 2 * DAWN_PRINT_INDENT)
               << "\e[0m";
-    if(doMethod_->getChild(i)->getCallerAccesses())
-      std::cout << doMethod_->getChild(i)->getCallerAccesses()->toString(this,
-                                                                         3 * DAWN_PRINT_INDENT)
-                << "\n";
+    auto sap = *(std::next(doMethod_->sapBegin().clone(), i));
+    if(sap.getCallerAccesses())
+      std::cout << sap.getCallerAccesses()->toString(this, 3 * DAWN_PRINT_INDENT) << "\n";
   }
   std::cout.flush();
 }
@@ -714,7 +712,7 @@ void StencilFunctionInstantiation::checkFunctionBindings() const {
   }
 
   // check that the list of <statement,access> are set for all statements
-  DAWN_ASSERT_MSG((getAST()->getRoot()->getStatements().size() == doMethod_->getChildren().size()),
+  DAWN_ASSERT_MSG((getAST()->getRoot()->getStatements().size() == doMethod_->getStmts().size()),
                   "AST has different number of statements as the statement accesses pairs");
 }
 

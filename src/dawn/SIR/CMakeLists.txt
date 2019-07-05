@@ -37,6 +37,9 @@ yoda_add_library(
           ASTUtil.h
           ASTVisitor.cpp
           ASTVisitor.h
+          ASTNodeIterator.h
+          ASTOps.h
+          ASTOps.cpp
           SIR.cpp
           SIR.h
           SIR.proto

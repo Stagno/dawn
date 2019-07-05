@@ -34,6 +34,7 @@ yoda_add_library(
           IndexGenerator.cpp
           IndexGenerator.h
           IndexRange.h
+          IteratorRange.h
           Json.h
           Logging.cpp
           Logging.h

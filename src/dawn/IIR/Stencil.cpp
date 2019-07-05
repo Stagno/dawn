@@ -19,6 +19,7 @@
 #include "dawn/IIR/StatementAccessesPair.h"
 #include "dawn/Optimizer/Renaming.h"
 #include "dawn/SIR/SIR.h"
+#include "dawn/Support/IteratorRange.h"
 #include "dawn/Support/StringUtil.h"
 #include "dawn/Support/Unreachable.h"
 #include <algorithm>
@@ -204,12 +205,13 @@ int Stencil::getNumStages() const {
 }
 
 void Stencil::forEachStatementAccessesPair(
-    std::function<void(ArrayRef<std::unique_ptr<StatementAccessesPair>>)> func, bool updateFields) {
+    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+    bool updateFields) {
   forEachStatementAccessesPairImpl(func, 0, getNumStages(), updateFields);
 }
 
 void Stencil::forEachStatementAccessesPair(
-    std::function<void(ArrayRef<std::unique_ptr<StatementAccessesPair>>)> func,
+    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
     const Stencil::Lifetime& lifetime, bool updateFields) {
   int startStageIdx = getStageIndexFromPosition(lifetime.Begin.StagePos);
   int endStageIdx = getStageIndexFromPosition(lifetime.End.StagePos);
@@ -217,12 +219,12 @@ void Stencil::forEachStatementAccessesPair(
 }
 
 void Stencil::forEachStatementAccessesPairImpl(
-    std::function<void(ArrayRef<std::unique_ptr<StatementAccessesPair>>)> func, int startStageIdx,
-    int endStageIdx, bool updateFields) {
+    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+    int startStageIdx, int endStageIdx, bool updateFields) {
   for(int stageIdx = startStageIdx; stageIdx < endStageIdx; ++stageIdx) {
     const auto& stage = getStage(stageIdx);
     for(const auto& doMethodPtr : stage->getChildren()) {
-      func(doMethodPtr->getChildren());
+      func(doMethodPtr->sapRange());
       if(updateFields) {
         doMethodPtr->update(iir::NodeUpdateType::level);
       }
@@ -489,8 +491,8 @@ Stencil::Lifetime Stencil::getLifetime(const int AccessID) const {
         DoMethod& doMethod = *doMethodPtr;
 
         int statementIdx = 0;
-        for(const auto& stmtAccessPair : doMethod.getChildren()) {
-          const Accesses& accesses = *stmtAccessPair->getAccesses();
+        for(const auto& stmtAccessPair : doMethod.sapRange()) {
+          const Accesses& accesses = *stmtAccessPair.getAccesses();
 
           auto processAccessMap = [&](const std::unordered_map<int, Extents>& accessMap) {
             if(!accessMap.count(AccessID))
@@ -549,9 +551,10 @@ boost::optional<Interval> Stencil::getEnclosingIntervalTemporaries() const {
 }
 
 void Stencil::accept(ASTVisitor& visitor) {
-  for(const auto& stmtAccessesPairPtr : iterateIIROver<StatementAccessesPair>(*this)) {
-    stmtAccessesPairPtr->getStatement()->ASTStmt->accept(visitor);
-  }
+  for(const auto& doMethod : iterateIIROver<DoMethod>(*this))
+    for(const auto& stmtAccessesPair : doMethod->sapRange()) {
+      stmtAccessesPair.getStatement()->ASTStmt->accept(visitor);
+    }
 }
 
 } // namespace iir

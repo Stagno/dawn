@@ -17,6 +17,8 @@
 #include "dawn/IIR/Accesses.h"
 #include "dawn/IIR/StencilFunctionInstantiation.h"
 #include "dawn/IIR/StencilMetaInformation.h"
+#include "dawn/SIR/ASTNodeIterator.h"
+#include "dawn/SIR/ASTStmt.h"
 #include "dawn/SIR/ASTStringifier.h"
 #include "dawn/SIR/Statement.h"
 #include "dawn/Support/Printing.h"
@@ -28,8 +30,10 @@ namespace iir {
 namespace {
 
 template <class InstantiationType>
-static std::string toStringImpl(const StatementAccessesPair* pair,
-                                const InstantiationType* instantiation, std::size_t initialIndent) {
+static std::string
+toStringImpl(const StatementAccessesPair* pair, const InstantiationType* instantiation,
+             const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+             std::size_t initialIndent) {
   std::stringstream ss;
 
   std::string initialIndentStr = std::string(initialIndent, ' ');
@@ -51,10 +55,10 @@ static std::string toStringImpl(const StatementAccessesPair* pair,
     ss << pair->getCalleeAccesses()->toString(instantiation, curIndent + DAWN_PRINT_INDENT) << "\n";
   }
 
-  if(!pair->getBlockStatements().empty()) {
+  if(pair->hasBlockStatements()) {
     ss << curIndentStr << "BlockStatements:\n";
-    for(auto& child : pair->getBlockStatements())
-      ss << child->toString(instantiation, curIndent);
+    for(auto& child : pair->getBlockStatementAccessesPairs(astStmtToSAPMap))
+      ss << child.toString(instantiation, astStmtToSAPMap, curIndent);
   }
   ss << initialIndentStr << "]\n";
 
@@ -65,6 +69,14 @@ static std::string toStringImpl(const StatementAccessesPair* pair,
 
 StatementAccessesPair::StatementAccessesPair(const std::shared_ptr<Statement>& statement)
     : statement_(statement), callerAccesses_(nullptr), calleeAccesses_(nullptr) {}
+
+StatementAccessesPair::StatementAccessesPair(const StatementAccessesPair& other) {
+  *this = std::move(*(other.clone()));
+}
+
+StatementAccessesPair& StatementAccessesPair::operator=(const StatementAccessesPair& other) {
+  return *this = std::move(*(other.clone()));
+}
 
 std::unique_ptr<StatementAccessesPair> StatementAccessesPair::clone() const {
   auto cloneSAP = make_unique<StatementAccessesPair>(statement_);
@@ -79,9 +91,6 @@ std::unique_ptr<StatementAccessesPair> StatementAccessesPair::clone() const {
   } else {
     cloneSAP->calleeAccesses_ = nullptr;
   }
-  cloneSAP->blockStatements_ = blockStatements_.clone();
-
-  cloneSAP->cloneChildrenFrom(*this);
 
   return cloneSAP;
 }
@@ -98,16 +107,20 @@ void StatementAccessesPair::setAccesses(const std::shared_ptr<Accesses>& accesse
   callerAccesses_ = accesses;
 }
 
-const std::vector<std::unique_ptr<StatementAccessesPair>>&
-StatementAccessesPair::getBlockStatements() const {
-  return blockStatements_.getBlockStatements();
+ASTRange<Stmt, true> StatementAccessesPair::getBlockStatements() const {
+  DAWN_ASSERT(hasBlockStatements());
+  return ASTRange<Stmt, true>(*statement_->ASTStmt);
 }
 
-void StatementAccessesPair::insertBlockStatement(std::unique_ptr<StatementAccessesPair>&& stmt) {
-  blockStatements_.insert(std::move(stmt));
+StatementAccessesPairRange<Stmt, true> StatementAccessesPair::getBlockStatementAccessesPairs(
+    const ASTStmtToSAPMapType& astStmtToSAPMap) const {
+  DAWN_ASSERT(hasBlockStatements());
+  return StatementAccessesPairRange<Stmt, true>(*statement_->ASTStmt, astStmtToSAPMap);
 }
 
-boost::optional<Extents> StatementAccessesPair::computeMaximumExtents(const int accessID) const {
+boost::optional<Extents>
+StatementAccessesPair::computeMaximumExtents(const int accessID,
+                                             const ASTStmtToSAPMapType& astStmtToSAPMap) const {
   boost::optional<Extents> extents;
 
   if(callerAccesses_->hasReadAccess(accessID) || callerAccesses_->hasWriteAccess(accessID)) {
@@ -127,8 +140,8 @@ boost::optional<Extents> StatementAccessesPair::computeMaximumExtents(const int 
     }
   }
 
-  for(auto const& child : blockStatements_.getBlockStatements()) {
-    auto childExtent = child->computeMaximumExtents(accessID);
+  for(auto const& child : getBlockStatementAccessesPairs(astStmtToSAPMap)) {
+    auto childExtent = child.computeMaximumExtents(accessID, astStmtToSAPMap);
     if(!childExtent.is_initialized())
       continue;
     if(extents.is_initialized())
@@ -141,7 +154,8 @@ boost::optional<Extents> StatementAccessesPair::computeMaximumExtents(const int 
 }
 
 bool StatementAccessesPair::hasBlockStatements() const {
-  return blockStatements_.hasBlockStatements();
+  return statement_->ASTStmt->getKind() == Stmt::SK_BlockStmt ||
+         statement_->ASTStmt->getKind() == Stmt::SK_IfStmt;
 }
 
 std::shared_ptr<Accesses> StatementAccessesPair::getCallerAccesses() const { return getAccesses(); }
@@ -197,13 +211,15 @@ json::json StatementAccessesPair::jsonDump(const StencilMetaInformation& metadat
 }
 
 std::string StatementAccessesPair::toString(const StencilMetaInformation* metadata,
+                                            const ASTStmtToSAPMapType& astStmtToSAPMap,
                                             std::size_t initialIndent) const {
-  return toStringImpl(this, metadata, initialIndent);
+  return toStringImpl(this, metadata, astStmtToSAPMap, initialIndent);
 }
 
 std::string StatementAccessesPair::toString(const StencilFunctionInstantiation* stencilFunc,
+                                            const ASTStmtToSAPMapType& astStmtToSAPMap,
                                             std::size_t initialIndent) const {
-  return toStringImpl(this, stencilFunc, initialIndent);
+  return toStringImpl(this, stencilFunc, astStmtToSAPMap, initialIndent);
 }
 
 } // namespace iir

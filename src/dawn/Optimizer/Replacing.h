@@ -15,8 +15,10 @@
 #ifndef DAWN_OPTIMIZER_REPLACING_H
 #define DAWN_OPTIMIZER_REPLACING_H
 
+#include "dawn/IIR/StatementAccessesPairIterator.h"
 #include "dawn/SIR/ASTVisitor.h"
 #include "dawn/Support/ArrayRef.h"
+#include "dawn/Support/IteratorRange.h"
 #include <memory>
 
 namespace dawn {
@@ -40,7 +42,7 @@ class StencilMetaInformation;
 void replaceFieldWithVarAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& varname,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs);
 
 /// @brief Replace all variable accesses with field accesses in the given `stmts`
 ///
@@ -48,7 +50,7 @@ void replaceFieldWithVarAccessInStmts(
 void replaceVarWithFieldAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& fieldname,
-    ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs);
 
 /// @brief Replace all stencil calls to `oldStencilID` with a series of stencil calls to
 /// `newStencilIDs` in the stencil description AST of `instantiation`

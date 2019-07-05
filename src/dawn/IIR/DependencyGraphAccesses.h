@@ -18,6 +18,7 @@
 #include "dawn/Compiler/DiagnosticsEngine.h"
 #include "dawn/IIR/DependencyGraph.h"
 #include "dawn/IIR/Extents.h"
+#include "dawn/IIR/StatementAccessesPairIterator.h"
 #include "dawn/Support/TypeTraits.h"
 #include <set>
 #include <unordered_map>
@@ -84,7 +85,9 @@ public:
       merge(g.get());
   }
 
-  /// @brief Process the StatementAccessPair and insert it into the current graph
+  /// @brief Process a StatementAccessPair and inserts it into the current graph. A
+  /// StatementAccessesPairIterator<Stmt, false> (initialized with the intended StatementAccessPair
+  /// as root) visiting root must be provided.
   ///
   /// For each write and read access a node will be inserted. Between each write and read access an
   /// edge will be created s.t
@@ -94,8 +97,7 @@ public:
   /// +-------+           +--------+
   ///
   /// Note that only child-less nodes are processed.
-  void
-  insertStatementAccessesPair(const std::unique_ptr<iir::StatementAccessesPair>& stmtAccessPair);
+  void insertStatementAccessesPair(StatementAccessesPairIterator<Stmt, false> stmtAccessPairIt);
 
   /// @brief Insert a new node
   Vertex& insertNode(int ID);

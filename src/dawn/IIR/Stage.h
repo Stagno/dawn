@@ -79,7 +79,6 @@ public:
 
   /// @name Constructors and Assignment
   /// @{
-  Stage(const StencilMetaInformation& metaData, int StageID, const Interval& interval);
   Stage(const StencilMetaInformation& metaData, int StageID);
 
   Stage(Stage&&) = default;

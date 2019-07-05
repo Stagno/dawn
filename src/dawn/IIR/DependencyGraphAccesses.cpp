@@ -26,18 +26,22 @@ namespace dawn {
 namespace iir {
 
 void DependencyGraphAccesses::insertStatementAccessesPair(
-    const std::unique_ptr<iir::StatementAccessesPair>& stmtAccessPair) {
+    StatementAccessesPairIterator<Stmt, false> stmtAccessPairIt) {
+  DAWN_ASSERT(stmtAccessPairIt.base().isVisitingRoot());
+  // TODO iir_restructuring: this is in forward insertion order, it should be in backward insertion
+  // order (need backward iterator)
+  for(; !stmtAccessPairIt.isEnd(); ++stmtAccessPairIt) {
+    const auto& stmtAccessPair = *stmtAccessPairIt;
+    if(stmtAccessPair.hasBlockStatements())
+      continue;
 
-  if(stmtAccessPair->hasBlockStatements()) {
-    for(const auto& s : stmtAccessPair->getBlockStatements())
-      insertStatementAccessesPair(s);
-  } else {
-
-    for(const auto& writeAccess : stmtAccessPair->getAccesses()->getWriteAccesses()) {
+    for(const auto& writeAccess : stmtAccessPair.getAccesses()->getWriteAccesses()) {
       insertNode(writeAccess.first);
 
-      for(const auto& readAccess : stmtAccessPair->getAccesses()->getReadAccesses())
-        insertEdge(writeAccess.first, readAccess.first, readAccess.second);
+      for(const auto& readAccess : stmtAccessPair.getAccesses()->getReadAccesses())
+        if(stmtAccessPair.hasBlockStatements()) {
+          insertEdge(writeAccess.first, readAccess.first, readAccess.second);
+        }
     }
   }
 }

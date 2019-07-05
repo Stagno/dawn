@@ -14,14 +14,14 @@
 
 #include "dawn/IIR/StencilInstantiation.h"
 #include "dawn/SIR/ASTUtil.h"
-#include <stack>
+#include <list>
 
 namespace dawn {
 
 //===------------------------------------------------------------------------------------------===//
 //     StatementMapper
 //===------------------------------------------------------------------------------------------===//
-/// @brief Map the statements of the AST to a flat list of statements and assign AccessIDs to all
+/// @brief Map the statements of the AST to new StatementAccessesPairs and assign AccessIDs to all
 /// field, variable and literal accesses. In addition, stencil functions are instantiated.
 class StatementMapper : public ASTVisitor {
 
@@ -30,8 +30,10 @@ class StatementMapper : public ASTVisitor {
   struct Scope : public NonCopyable {
     Scope(iir::DoMethod& doMethod, const iir::Interval& interval,
           const std::shared_ptr<iir::StencilFunctionInstantiation>& stencilFun)
-        : doMethod_(doMethod), VerticalInterval(interval), ScopeDepth(0),
-          FunctionInstantiation(stencilFun), ArgumentIndex(0) {}
+        : doMethod_(doMethod), VerticalInterval(interval),
+          ASTStmtToSAPMap_(
+              const_cast<iir::DoMethod::ASTStmtToSAPMapType&>(doMethod.getASTStmtToSAPMap())),
+          ScopeDepth(0), FunctionInstantiation(stencilFun), ArgumentIndex(0) {}
 
     /// DoMethod containing the list of statement/accesses pair of the stencil function or stage
     iir::DoMethod& doMethod_;
@@ -39,10 +41,14 @@ class StatementMapper : public ASTVisitor {
     /// Statement accesses pair pointing to the statement we are currently working on. This might
     /// not be the top-level statement which was passed to the constructor but rather a
     /// sub-statement (child) of the top-level statement if decend into nested block statements.
-    std::stack<std::unique_ptr<iir::StatementAccessesPair> const*> CurentStmtAccessesPair;
+    std::list<iir::StatementAccessesPair const*> CurentStmtAccessesPair;
 
     /// The current interval
     const iir::Interval VerticalInterval;
+
+    /// Reference to the AST Stmt to StatetementAccessesPair map of doMethod_ in which to insert new
+    /// pairs
+    iir::DoMethod::ASTStmtToSAPMapType& ASTStmtToSAPMap_;
 
     /// Scope variable name to (global) AccessID
     std::unordered_map<std::string, int> LocalVarNameToAccessIDMap;

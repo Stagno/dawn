@@ -15,6 +15,7 @@
 #ifndef DAWN_OPTIMIZER_ACCESSCOMPUTATION_H
 #define DAWN_OPTIMIZER_ACCESSCOMPUTATION_H
 
+#include "dawn/IIR/DoMethod.h"
 #include "dawn/Support/ArrayRef.h"
 #include <memory>
 #include <vector>
@@ -34,9 +35,9 @@ class StencilFunctionInstantiation;
 /// @fn computeAccesses
 /// @brief Compute the Accesses of `statementAccessesPairs`
 /// @ingroup optimizer
-extern void
-computeAccesses(iir::StencilInstantiation* instantiation,
-                ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+extern void computeAccesses(iir::StencilInstantiation* instantiation,
+                            const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+                            iir::DoMethod::SAPRange statementAccessesPairs);
 
 /// @fn computeAccesses
 /// @brief Compute the caller and callee Accesses of `statementCallerAccessesPairs`
@@ -48,7 +49,12 @@ computeAccesses(iir::StencilInstantiation* instantiation,
 /// @ingroup optimizer
 extern void
 computeAccesses(std::shared_ptr<iir::StencilFunctionInstantiation> stencilFunctionInstantiation,
-                ArrayRef<std::unique_ptr<iir::StatementAccessesPair>> statementAccessesPairs);
+                const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+                iir::DoMethod::SAPRange statementAccessesPairs);
+
+extern void computeAccesses(const iir::StencilMetaInformation& metadata,
+                            const iir::StatementAccessesPair::ASTStmtToSAPMapType& astStmtToSAPMap,
+                            iir::DoMethod::SAPRange statementAccessesPairs);
 
 /// @}
 
