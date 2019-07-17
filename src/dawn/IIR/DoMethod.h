@@ -55,16 +55,23 @@ public:
 
   /// @brief Constructor for empty DoMethod
   DoMethod(Interval interval, const StencilMetaInformation& metaData);
+
   // TODO iir_restructuring whether the domethod is of a function or of a stencil it should be
-  // transparent here. Need refactoring of StatementMapper!
+  // transparent here. Also this constructor leaves the DoMethod in an inconsistent state! Need
+  // refactoring of StatementMapper!
   /// @brief Constructor for function's DoMethod
   DoMethod(Interval interval, const StencilMetaInformation& metaData,
            const std::shared_ptr<AST> ast);
+
+  /// @brief Constructor for stencil's DoMethod filled with statements (in the iterator range) from
+  /// another DoMethod.
+  DoMethod(Interval interval, const StencilMetaInformation& metaData,
+           IteratorRange<SAPConstIterator> saps);
   /// @brief Constructor for stencil's DoMethod with AST (also creates necessary AccessIDs and
   /// computes accesses)
   DoMethod(Interval interval, const StencilMetaInformation& metaData,
            const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
-           iir::StencilInstantiation* instantiation,
+           const std::shared_ptr<iir::StencilInstantiation>& instantiation,
            const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
            const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
   DoMethod(DoMethod&&) = default;
@@ -126,7 +133,7 @@ public:
     return ast_->getRoot()->getStatements();
   }
   /// @brief returns a reference to the internal map from ASTStmt to StatementAccessesPair
-  const ASTStmtToSAPMapType& getASTStmtToSAPMap() const { return ASTStmtToSAPMap_; }
+  inline const ASTStmtToSAPMapType& getASTStmtToSAPMap() const { return ASTStmtToSAPMap_; }
 
   inline const iir::StatementAccessesPair&
   getStatementAccessesPairFromStmt(const Stmt* stmt) const {
@@ -144,7 +151,7 @@ public:
   ///  @brief Fills the DoMethod with the provided AST (also creates necessary AccessIDs and
   ///  computes accesses)
   void fillWithAST(const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
-                   iir::StencilInstantiation* instantiation,
+                   const std::shared_ptr<iir::StencilInstantiation>& instantiation,
                    const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
                    const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
   // TODO iir_restructuring append AST

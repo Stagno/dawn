@@ -45,8 +45,14 @@ DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
       ast_(ast), ASTStmtToSAPMap_() {}
 
 DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
+                   IteratorRange<SAPConstIterator> saps)
+    : DoMethod(interval, metaData) {
+  appendStatements(std::move(saps));
+}
+
+DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
                    const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
-                   iir::StencilInstantiation* instantiation,
+                   const std::shared_ptr<iir::StencilInstantiation>& instantiation,
                    const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
                    const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap)
     : DoMethod(interval, metaData) {
@@ -109,7 +115,7 @@ void DoMethod::setInterval(const Interval& interval) { interval_ = interval; }
 
 void DoMethod::fillWithAST(
     const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
-    iir::StencilInstantiation* instantiation,
+    const std::shared_ptr<iir::StencilInstantiation>& instantiation,
     const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
     const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap) {
 

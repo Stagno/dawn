@@ -299,20 +299,19 @@ Stage::split(std::deque<int>& splitterIndices,
 
     newStages.push_back(make_unique<Stage>(metaData_, UIDGenerator::getInstance()->get()));
     Stage& newStage = *newStages.back();
-    newStage.insertChild(make_unique<DoMethod>(thisDoMethod.getInterval(), metaData_));
+    auto range = IteratorRange<DoMethod::SAPConstIterator>(
+        DoMethod::SAPConstIterator(prevSplitterIndex, thisDoMethod.getASTStmtToSAPMap()),
+        DoMethod::SAPConstIterator(nextSplitterIndex, thisDoMethod.getASTStmtToSAPMap()));
+    // The new stage contains the statements in the range [prevSplitterIndex , nextSplitterIndex)
+    // TODO: check correctness!
+    // TODO  iir_restructuring : this code used to std::move statements to the new doMethod... is
+    // this the intended behavior?
+    newStage.insertChild(
+        make_unique<DoMethod>(thisDoMethod.getInterval(), metaData_, std::move(range)));
     DoMethod& doMethod = newStage.getSingleDoMethod();
 
     if(graphs)
       doMethod.setDependencyGraph((*graphs)[i]);
-
-    // The new stage contains the statements in the range [prevSplitterIndex , nextSplitterIndex)
-    // TODO: check correctness!
-    // TODO  iir_restructuring : this code used to std::move *it to the new doMethod... is this the
-    // intended behavior?
-    auto range = IteratorRange<DoMethod::SAPConstIterator>(
-        DoMethod::SAPConstIterator(prevSplitterIndex, thisDoMethod.getASTStmtToSAPMap()),
-        DoMethod::SAPConstIterator(nextSplitterIndex, thisDoMethod.getASTStmtToSAPMap()));
-    doMethod.appendStatements(std::move(range));
 
     // Update the fields of the new doMethod
     doMethod.update(NodeUpdateType::level);
