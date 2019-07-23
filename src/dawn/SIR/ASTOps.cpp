@@ -27,66 +27,77 @@ arrayRefIteratorToVectorIterator(const std::vector<T>& vector,
 }
 
 template <typename T>
-typename ArrayRef<T>::iterator
+typename MutableArrayRef<T>::iterator
 vectorIteratorToArrayRefIterator(const std::vector<T>& vector,
                                  typename std::vector<T>::const_iterator vectorIterator) {
-  return vector.empty() ? nullptr : vector.data() + (vectorIterator - vector.begin());
+  return vector.empty() ? nullptr
+                        : const_cast<typename MutableArrayRef<T>::iterator>(
+                              vector.data() + (vectorIterator - vector.begin()));
 }
 
 } // namespace
 
-// Input contract: iterator root must be a BlockStmt
+// TODO iir_restructuring ADD root = IFSTMT CASE
+// Input contract: (node) iterator must be a top-level iterator and its root must be a BlockStmt
 template <>
-ASTNodeIterator<Stmt, true> ASTOps::insertAfter(std::shared_ptr<Stmt> stmt,
-                                                ASTNodeIterator<Stmt, true>& node) {
-  // TODO iir_restructuring ADD root = IFSTMT CASE
-  // TODO thoroughly check correctness, warnings, etc.
-  DAWN_ASSERT(node.getASTRoot().getKind() == Stmt::SK_BlockStmt);
+ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>
+ASTOps::insertAfter(std::shared_ptr<Stmt> stmt,
+                    ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>& node) {
+
+  DAWN_ASSERT(node.getASTRoot()->getKind() == Stmt::SK_BlockStmt);
+  DAWN_ASSERT(node.isTop());
   DAWN_ASSERT(stmt);
   std::vector<std::shared_ptr<Stmt>>& children =
-      dynamic_cast<BlockStmt&>(node.getASTRoot()).getStatements();
+      std::dynamic_pointer_cast<BlockStmt>(node.getASTRoot())->getStatements();
 
   if(node.isVoidIter() || node.isEnd()) {
     // Insert as last child
     children.push_back(stmt);
-    // input iterator (node) must be kept at end
-    // unless it's void, in which case it must be recreated
+
+    // if iterator (node) is void it must be recreated as non-void
     if(node.isVoidIter())
-      node = std::move(ASTNodeIterator<Stmt, true>::CreateInstance(node.getASTRoot()));
+      node = std::move(
+          ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>::CreateInstance(
+              node.getASTRoot()));
+
+    // input iterator (node) must be kept at end
+    node.setToEnd();
+
     // iterator to be returned must point to inserted element
-    ASTNodeIterator<Stmt, true> insertedNode(node.clone());
-    insertedNode.childrenIterator_ = const_cast<Stmt::StmtRangeType::iterator>(
-        vectorIteratorToArrayRefIterator(children, children.end() - 1));
-    insertedNode.setupRestIterator();
+    ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT> insertedNode(
+        std::move(node.clone()));
+    SubtreeIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>* insertedImpl =
+        dynamic_cast<SubtreeIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>*>(
+            insertedNode.impl_.get());
+    insertedImpl->restIterator_ =
+        std::unique_ptr<VoidIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>(
+            new VoidIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(
+                vectorIteratorToArrayRefIterator(children, children.end() - 1), false));
+
     return insertedNode;
   }
-  if(node.isVisitingRoot()) {
-    // Insert as first child
-    children.insert(children.begin(), stmt);
-    // input iterator (node) must be kept at root
-    // iterator to be returned must point to inserted element
-    ASTNodeIterator<Stmt, true> insertedNode(node.clone());
-    insertedNode.childrenIterator_ = const_cast<Stmt::StmtRangeType::iterator>(
-        vectorIteratorToArrayRefIterator(children, children.begin()));
-    insertedNode.setupRestIterator();
-    return insertedNode;
-  }
+  // skipping case isVisitingRoot() = true, since it's a first-level only visit iterator
+  SubtreeIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>* impl =
+      dynamic_cast<SubtreeIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>*>(
+          node.impl_.get());
 
   std::vector<std::shared_ptr<Stmt>>::const_iterator vecIt = ++arrayRefIteratorToVectorIterator(
-      children, node.childrenIterator_,
-      node.rootStmt_.getChildren()
+      children, impl->restIterator_->rootStmtIt_,
+      node.getASTRoot()
+          ->getChildren()
           .begin()); // Should point to element that is after the position of insertion
+
   vecIt = children.insert(vecIt, stmt); // Returns iterator to inserted element
 
   // Fix iterator in input
-  node.childrenIterator_ = const_cast<Stmt::StmtRangeType::iterator>(
-      vectorIteratorToArrayRefIterator(children, vecIt - 1));
-  node.setupRestIterator();
+  impl->restIterator_ =
+      std::unique_ptr<VoidIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>(
+          new VoidIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(
+              vectorIteratorToArrayRefIterator(children, vecIt - 1), false));
 
-  ASTNodeIterator<Stmt, true> insertedNode(node.clone()); // Clone the iterator
-  // Fix it
-  ++(insertedNode.childrenIterator_);
-  insertedNode.setupRestIterator();
+  // iterator to be returned must point to inserted element
+  ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT> insertedNode(node.clone());
+  ++insertedNode;
   return insertedNode;
 }
 

@@ -240,10 +240,14 @@ public:
   /// @param updateFields   Update the fields afterwards
   /// @{
   void forEachStatementAccessesPair(
-      std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+      std::function<void(IteratorRange<StatementAccessesPairIterator<
+                             ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)>
+          func,
       bool updateFields = false);
   void forEachStatementAccessesPair(
-      std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+      std::function<void(IteratorRange<StatementAccessesPairIterator<
+                             ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)>
+          func,
       const Lifetime& lifetime, bool updateFields = false);
   /// @}
 
@@ -306,7 +310,9 @@ public:
 
 private:
   void forEachStatementAccessesPairImpl(
-      std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+      std::function<void(IteratorRange<StatementAccessesPairIterator<
+                             ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)>
+          func,
       int startStageIdx, int endStageIdx, bool updateFields);
   void updateFieldsImpl(int startStageIdx, int endStageIdx);
 };

@@ -42,7 +42,7 @@ class StencilMetaInformation;
 void replaceFieldWithVarAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& varname,
-    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs);
+    IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>> statementAccessesPairs);
 
 /// @brief Replace all variable accesses with field accesses in the given `stmts`
 ///
@@ -50,7 +50,7 @@ void replaceFieldWithVarAccessInStmts(
 void replaceVarWithFieldAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& fieldname,
-    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs);
+    IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>> statementAccessesPairs);
 
 /// @brief Replace all stencil calls to `oldStencilID` with a series of stencil calls to
 /// `newStencilIDs` in the stencil description AST of `instantiation`

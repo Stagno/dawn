@@ -86,8 +86,8 @@ public:
   }
 
   /// @brief Process a StatementAccessPair and inserts it into the current graph. A
-  /// StatementAccessesPairIterator<Stmt, false> (initialized with the intended StatementAccessPair
-  /// as root) visiting root must be provided.
+  /// StatementAccessesPairIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT> (initialized with the
+  /// intended StatementAccessPair as root) visiting root must be provided.
   ///
   /// For each write and read access a node will be inserted. Between each write and read access an
   /// edge will be created s.t
@@ -97,7 +97,8 @@ public:
   /// +-------+           +--------+
   ///
   /// Note that only child-less nodes are processed.
-  void insertStatementAccessesPair(StatementAccessesPairIterator<Stmt, false> stmtAccessPairIt);
+  void insertStatementAccessesPair(
+      StatementAccessesPairIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT> stmtAccessPairIt);
 
   /// @brief Insert a new node
   Vertex& insertNode(int ID);

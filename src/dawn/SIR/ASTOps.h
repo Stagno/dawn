@@ -23,9 +23,9 @@ public:
   /// @brief Inserts stmt after node pointed by iterator 'node'. Keeps the inout 'node' iterator to
   /// the same position (whether it points to a node or to end()), fixing it to be valid after the
   /// operation. Returns a valid iterator to the inserted node.
-  template <bool onlyFirstLevel>
-  static ASTNodeIterator<Stmt, onlyFirstLevel>
-  insertAfter(std::shared_ptr<Stmt> stmt, ASTNodeIterator<Stmt, onlyFirstLevel>& node);
+  template <ASTNodeIteratorVisitKind onlyFirstLevel>
+  static ASTNodeIterator<onlyFirstLevel> insertAfter(std::shared_ptr<Stmt> stmt,
+                                                     ASTNodeIterator<onlyFirstLevel>& node);
 };
 } // namespace dawn
 

@@ -65,7 +65,7 @@ public:
 void replaceFieldWithVarAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& varname,
-    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) {
+    IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>> statementAccessesPairs) {
 
   GetFieldAndVarAccesses visitor(metadata, AccessID);
   for(const auto& statementAccessesPair : statementAccessesPairs) {
@@ -88,7 +88,7 @@ void replaceFieldWithVarAccessInStmts(
 void replaceVarWithFieldAccessInStmts(
     iir::StencilMetaInformation& metadata, iir::Stencil* stencil, int AccessID,
     const std::string& fieldname,
-    IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) {
+    IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>> statementAccessesPairs) {
 
   GetFieldAndVarAccesses visitor(metadata, AccessID);
   for(const auto& statementAccessesPair : statementAccessesPairs) {

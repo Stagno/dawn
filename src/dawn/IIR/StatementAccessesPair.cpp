@@ -107,15 +107,18 @@ void StatementAccessesPair::setAccesses(const std::shared_ptr<Accesses>& accesse
   callerAccesses_ = accesses;
 }
 
-ASTRange<Stmt, true> StatementAccessesPair::getBlockStatements() const {
+ASTRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>
+StatementAccessesPair::getBlockStatements() const {
   DAWN_ASSERT(hasBlockStatements());
-  return ASTRange<Stmt, true>(*statement_->ASTStmt);
+  return ASTRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(statement_->ASTStmt);
 }
 
-StatementAccessesPairRange<Stmt, true> StatementAccessesPair::getBlockStatementAccessesPairs(
+StatementAccessesPairRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>
+StatementAccessesPair::getBlockStatementAccessesPairs(
     const ASTStmtToSAPMapType& astStmtToSAPMap) const {
   DAWN_ASSERT(hasBlockStatements());
-  return StatementAccessesPairRange<Stmt, true>(*statement_->ASTStmt, astStmtToSAPMap);
+  return StatementAccessesPairRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(
+      statement_->ASTStmt, astStmtToSAPMap);
 }
 
 boost::optional<Extents>

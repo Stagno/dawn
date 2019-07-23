@@ -228,7 +228,9 @@ void StencilInstantiation::promoteLocalVariableToTemporaryField(Stencil* stencil
 
   // Replace all variable accesses with field accesses
   stencil->forEachStatementAccessesPair(
-      [&](IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) -> void {
+      [&](IteratorRange<
+          StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>
+              statementAccessesPairs) -> void {
         replaceVarWithFieldAccessInStmts(metadata_, stencil, accessID, fieldname,
                                          statementAccessesPairs.clone());
       },
@@ -240,7 +242,7 @@ void StencilInstantiation::promoteLocalVariableToTemporaryField(Stencil* stencil
                                                         .at(lifetime.Begin.DoMethodIndex)
                                                         ->sapRange();
   std::shared_ptr<Statement> oldStatement =
-      statementAccessesPairs[lifetime.Begin.StatementIndex].getStatement();
+      (*std::next(statementAccessesPairs.begin(), lifetime.Begin.StatementIndex)).getStatement();
 
   // The oldStmt has to be a `VarDeclStmt`. For example
   //
@@ -271,8 +273,8 @@ void StencilInstantiation::promoteLocalVariableToTemporaryField(Stencil* stencil
     auto exprStmt = std::make_shared<ExprStmt>(assignmentExpr);
 
     // Replace the statement
-    statementAccessesPairs[lifetime.Begin.StatementIndex].setStatement(
-        std::make_shared<Statement>(exprStmt, oldStatement->StackTrace));
+    (*std::next(statementAccessesPairs.begin(), lifetime.Begin.StatementIndex))
+        .setStatement(std::make_shared<Statement>(exprStmt, oldStatement->StackTrace));
 
     // Remove the variable
     metadata_.removeAccessID(accessID);
@@ -298,7 +300,9 @@ void StencilInstantiation::demoteTemporaryFieldToLocalVariable(Stencil* stencil,
 
   // Replace all field accesses with variable accesses
   stencil->forEachStatementAccessesPair(
-      [&](IteratorRange<StatementAccessesPairIterator<Stmt, true>> statementAccessesPairs) -> void {
+      [&](IteratorRange<
+          StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>
+              statementAccessesPairs) -> void {
         replaceFieldWithVarAccessInStmts(metadata_, stencil, AccessID, varname,
                                          statementAccessesPairs.clone());
       },
@@ -310,7 +314,7 @@ void StencilInstantiation::demoteTemporaryFieldToLocalVariable(Stencil* stencil,
                                                         .at(lifetime.Begin.DoMethodIndex)
                                                         ->sapRange();
   std::shared_ptr<Statement> oldStatement =
-      statementAccessesPairs[lifetime.Begin.StatementIndex].getStatement();
+      (*std::next(statementAccessesPairs.begin(), lifetime.Begin.StatementIndex)).getStatement();
 
   // The oldStmt has to be an `ExprStmt` with an `AssignmentExpr`. For example
   //
@@ -332,8 +336,8 @@ void StencilInstantiation::demoteTemporaryFieldToLocalVariable(Stencil* stencil,
                                     std::vector<std::shared_ptr<Expr>>{assignmentExpr->getRight()});
 
   // Replace the statement
-  statementAccessesPairs[lifetime.Begin.StatementIndex].setStatement(
-      std::make_shared<Statement>(varDeclStmt, oldStatement->StackTrace));
+  (*std::next(statementAccessesPairs.begin(), lifetime.Begin.StatementIndex))
+      .setStatement(std::make_shared<Statement>(varDeclStmt, oldStatement->StackTrace));
 
   // Remove the field
   metadata_.removeAccessID(AccessID);

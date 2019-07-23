@@ -205,13 +205,13 @@ int Stencil::getNumStages() const {
 }
 
 void Stencil::forEachStatementAccessesPair(
-    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+    std::function<void(IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)> func,
     bool updateFields) {
   forEachStatementAccessesPairImpl(func, 0, getNumStages(), updateFields);
 }
 
 void Stencil::forEachStatementAccessesPair(
-    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+    std::function<void(IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)> func,
     const Stencil::Lifetime& lifetime, bool updateFields) {
   int startStageIdx = getStageIndexFromPosition(lifetime.Begin.StagePos);
   int endStageIdx = getStageIndexFromPosition(lifetime.End.StagePos);
@@ -219,7 +219,7 @@ void Stencil::forEachStatementAccessesPair(
 }
 
 void Stencil::forEachStatementAccessesPairImpl(
-    std::function<void(IteratorRange<StatementAccessesPairIterator<Stmt, true>>)> func,
+    std::function<void(IteratorRange<StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>>)> func,
     int startStageIdx, int endStageIdx, bool updateFields) {
   for(int stageIdx = startStageIdx; stageIdx < endStageIdx; ++stageIdx) {
     const auto& stage = getStage(stageIdx);

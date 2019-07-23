@@ -43,12 +43,13 @@ public:
   static constexpr const char* name = "DoMethod";
 
   using ASTStmtToSAPMapType = std::unordered_map<const Stmt*, StatementAccessesPair>;
-  using FullASTConstIterator = ASTNodeIterator<Stmt, false>;
-  using FullASTRange = ASTRange<Stmt, false>;
-  using StmtsConstIterator = ASTNodeIterator<Stmt, true>;
-  using StmtsRange = ASTRange<Stmt, true>;
-  using SAPConstIterator = StatementAccessesPairIterator<Stmt, true>;
-  using SAPRange = StatementAccessesPairRange<Stmt, true>;
+  using FullASTConstIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
+  using FullASTRange = ASTRange<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
+  using StmtsConstIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using StmtsRange = ASTRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using SAPConstIterator =
+      StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using SAPRange = StatementAccessesPairRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
 
   /// @name Constructors and Assignment
   /// @{
@@ -88,39 +89,46 @@ public:
   /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
   /// to root
   inline FullASTConstIterator const astBegin() const {
-    return FullASTRange(*(ast_->getRoot())).begin();
+    return FullASTRange(ast_->getRoot()).begin();
   }
   /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
   /// to the end (after the last statement of the tree)
   inline FullASTConstIterator const astEnd() const {
-    return FullASTRange(*(ast_->getRoot())).end();
+    return iterateASTOver<ASTNodeIteratorVisitKind::FULL_AST_VISIT>(ast_->getRoot()).end();
   }
   /// @brief returns a depth-first pre-order iterator range through the whole AST of the DoMethod
-  inline FullASTRange astRange() const { return FullASTRange(*(ast_->getRoot())); }
+  inline FullASTRange astRange() const {
+    return iterateASTOver<ASTNodeIteratorVisitKind::FULL_AST_VISIT>(ast_->getRoot());
+  }
   /// @brief returns an iterator through the statements of the first level of the AST of the
   /// DoMethod pointing to the first one
   inline StmtsConstIterator const stmtsBegin() const {
-    return StmtsRange(*ast_->getRoot()).begin();
+    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot())
+        .begin();
   }
   /// @brief returns an iterator through the statements of the first level of the AST of the
   /// DoMethod pointing to the end (after the last statement)
-  inline StmtsConstIterator const stmtsEnd() const { return StmtsRange(*ast_->getRoot()).end(); }
+  inline StmtsConstIterator const stmtsEnd() const {
+    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot()).end();
+  }
   /// @brief returns an iterator range through the statements of the first level of the AST of the
   /// DoMethod
-  inline StmtsRange stmtsRange() const { return StmtsRange(*ast_->getRoot()); }
+  inline StmtsRange stmtsRange() const {
+    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot());
+  }
   /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
   /// level of the AST of the DoMethod pointing to the first one
   inline SAPConstIterator const sapBegin() const {
-    return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_).begin();
+    return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).begin();
   }
   /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
   /// level of the AST of the DoMethod pointing to the end (after the last statement)
   inline SAPConstIterator const sapEnd() const {
-    return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_).end();
+    return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).end();
   }
   /// @brief returns an iterator range through the StatementAccessesPairs of the statements of the
   /// first level of the AST of the DoMethod
-  inline SAPRange sapRange() const { return SAPRange(*ast_->getRoot(), ASTStmtToSAPMap_); }
+  inline SAPRange sapRange() const { return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_); }
   /// @}
 
   /// @name Getters

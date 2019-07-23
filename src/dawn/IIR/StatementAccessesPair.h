@@ -26,10 +26,10 @@
 
 namespace dawn {
 
-template <class ASTRootNode, bool onlyFirstLevel>
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
 class StatementAccessesPairIterator;
 
-template <typename ASTRootNode, bool onlyFirstLevel>
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
 class StatementAccessesPairRange;
 
 namespace iir {
@@ -91,10 +91,10 @@ public:
 
   /// @brief Get the AST statements inside the block (only one level deep). IfStmt gives
   /// a concatenation of the condition statement, the then and else blocks.
-  ASTRange<Stmt, true> getBlockStatements() const;
+  ASTRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT> getBlockStatements() const;
   /// @brief Get the AST StatementAccessesPairs of the statements inside the block (only one level
   /// deep). IfStmt gives a concatenation of the condition statement, the then and else blocks.
-  StatementAccessesPairRange<Stmt, true>
+  StatementAccessesPairRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>
   getBlockStatementAccessesPairs(const ASTStmtToSAPMapType& astStmtToSAPMap) const;
   bool hasBlockStatements() const;
 

@@ -26,7 +26,7 @@ namespace dawn {
 namespace iir {
 
 void DependencyGraphAccesses::insertStatementAccessesPair(
-    StatementAccessesPairIterator<Stmt, false> stmtAccessPairIt) {
+    StatementAccessesPairIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT> stmtAccessPairIt) {
   DAWN_ASSERT(stmtAccessPairIt.base().isVisitingRoot());
   // TODO iir_restructuring: this is in forward insertion order, it should be in backward insertion
   // order (need backward iterator)

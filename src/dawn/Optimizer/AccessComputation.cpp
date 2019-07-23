@@ -266,7 +266,8 @@ public:
       DAWN_ASSERT(curStmt->Pair.hasBlockStatements());
 
       auto curBlockStmt = make_unique<CurrentStatementAccessPair>(
-          curStmt->Pair.getBlockStatementAccessesPairs(astStmtToSAPMap_)[curStmt->ChildIndex]);
+          *std::next(curStmt->Pair.getBlockStatementAccessesPairs(astStmtToSAPMap_).begin(),
+                     curStmt->ChildIndex));
 
       curStatementAccessPairStack_.push_back(std::move(curBlockStmt));
 

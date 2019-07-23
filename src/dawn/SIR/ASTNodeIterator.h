@@ -22,129 +22,244 @@
 
 namespace dawn {
 
-/// @brief (Abstract) Pre-order visiting iterator through the Stmts of one or more ASTs.
-/// Specializations should specify on which ASTs to iterate and in which order.
-/// @ingroup sir
-template <typename GeneratorType, bool onlyFirstLevel, typename Enable = void>
-class ASTNodeIterator {
-public:
-  virtual ~ASTNodeIterator() = 0;
+enum class ASTNodeIteratorVisitKind : bool {
+  FULL_AST_VISIT = false,
+  ONLY_FIRST_LEVEL_VISIT = true
 };
-
-#define ASTNodeIterator_Stmt                                                                       \
-  ASTNodeIterator<ASTNode, onlyFirstLevel,                                                         \
-                  typename std::enable_if<std::is_base_of<Stmt, ASTNode>::value>::type>
-#define ASTVoidIterator_Stmt ASTVoidIterator<ASTNode, onlyFirstLevel>
 
 /// @brief Pre-order visiting iterator through the Stmts of an AST. Generated from a root Stmt.
 /// Depending on onlyFirstLevel parameter the visit is/isn't limited to the first level (also
 /// excluding root) of the AST.
 /// @ingroup sir
-template <typename ASTNode, bool onlyFirstLevel>
-class ASTNodeIterator_Stmt {
-  friend class ASTOps;
-  template <typename T, bool B, typename E>
-  friend class ASTNodeIterator;
-
-protected:
-  Stmt& rootStmt_;
-  std::unique_ptr<ASTNodeIterator> restIterator_ = nullptr;
-  Stmt::StmtRangeType::iterator childrenIterator_ = nullptr;
-  const bool isTop_;
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+class ASTNodeIteratorImpl {
+  friend class ASTOps; // TODO iir_restructuring : remove
+  template <ASTNodeIteratorVisitKind K>
+  friend class ASTNodeIteratorImpl;
+  template <ASTNodeIteratorVisitKind K>
+  friend class SubtreeIteratorImpl;
+  template <ASTNodeIteratorVisitKind K>
+  friend class VoidIteratorImpl;
 
 public:
-  static ASTNodeIterator CreateInstance(Stmt& root) {
-    return std::move(*(CreateInstance<true>(root).release()));
-  }
+  static std::unique_ptr<ASTNodeIteratorImpl> CreateInstance(const std::shared_ptr<Stmt>& root);
 
-  ASTNodeIterator(ASTNodeIterator&&) = default;
-  ASTNodeIterator(const ASTNodeIterator& o) = delete;
-  ASTNodeIterator& operator=(ASTNodeIterator&& o) { return *this = std::move(o); }
-  ASTNodeIterator& operator=(const ASTNodeIterator& o) = delete;
+  ASTNodeIteratorImpl(ASTNodeIteratorImpl&&) = default;
+  ASTNodeIteratorImpl(const ASTNodeIteratorImpl& o) = delete;
+  virtual ASTNodeIteratorImpl& operator=(ASTNodeIteratorImpl&& o) = delete;
+  ASTNodeIteratorImpl& operator=(const ASTNodeIteratorImpl& o) = delete;
+  virtual ~ASTNodeIteratorImpl() = default;
 
-  ASTNodeIterator clone() const;
+  virtual std::unique_ptr<ASTNodeIteratorImpl> clone() const = 0;
 
-  ASTNodeIterator& operator++();
-  bool operator==(const ASTNodeIterator& other) const;
-  inline bool operator!=(const ASTNodeIterator& other) const { return !(*this == other); }
+  virtual std::unique_ptr<ASTNodeIteratorImpl> operator++() = 0;
+  virtual bool operator==(const ASTNodeIteratorImpl& other) const = 0;
+  inline bool operator!=(const ASTNodeIteratorImpl& other) const { return !(*this == other); }
 
-  ASTNodeIterator& setToEnd();
-
-  Stmt& operator*() const;
-
-  inline bool isVisitingRoot() const { return childrenIterator_ == nullptr; }
-
-  inline bool isEnd() const { return isChildrenIteratorAtEnd() && restIterator_->isEnd(); }
-
-  inline bool isVoidIter() const { return false; }
+  virtual Stmt& operator*() const = 0;
+  /// @brief sets the iterator to end and returns it
+  virtual ASTNodeIteratorImpl& setToEnd() = 0;
+  virtual bool isVisitingRoot() const = 0;
+  virtual bool isEnd() const = 0;
+  virtual bool isVoidIter() const = 0;
 
   inline bool isTop() const { return isTop_; }
   /// @brief returns the root of the AST covered by this iterator
-  Stmt& getASTRoot() const { return rootStmt_; }
+  inline const std::shared_ptr<Stmt>& getASTRoot() const { return *rootStmtIt_; }
+
+  /// @brief returns a new ASTNodeIteratorImpl pointing to the same node of the first
+  /// level of the AST but of switched visit type (only first-level or full).
+  virtual std::unique_ptr<ASTNodeIteratorImpl<
+      static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>>
+  toggleOnlyFirstLevelVisiting() const = 0;
+
+  /// @brief List of ancestors from tree root to parent of rootStmtIt_ (empty if this is the tree
+  /// root)
+  virtual std::list<Stmt::StmtRangeType::iterator> getAncestors() const = 0;
+
+protected:
+  Stmt::StmtRangeType::iterator rootStmtIt_;
+  const bool isTop_;
+
+  static std::unique_ptr<ASTNodeIteratorImpl>
+  CreateTopLevelInstance(Stmt::StmtRangeType::iterator rootStmtIt);
+  static std::unique_ptr<ASTNodeIteratorImpl>
+  CreateRestInstance(Stmt::StmtRangeType::iterator rootStmtIt);
+
+  ASTNodeIteratorImpl(Stmt::StmtRangeType::iterator rootStmtIt, const bool isTop)
+      : rootStmtIt_(rootStmtIt), isTop_(isTop) {}
+};
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+class ASTNodeIterator {
+  friend class ASTOps; // TODO iir_restructuring : remove
+  template <ASTNodeIteratorVisitKind K>
+  friend class ASTNodeIterator;
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> impl_;
+
+public:
+  static ASTNodeIterator CreateInstance(const std::shared_ptr<Stmt>& root) {
+    return ASTNodeIterator(ASTNodeIteratorImpl<onlyFirstLevel>::CreateInstance(root));
+  }
+
+  ASTNodeIterator(ASTNodeIterator&& o) { impl_ = std::move(o.impl_); } // Steal the implementation
+  ASTNodeIterator(const ASTNodeIterator& o) = delete;
+  ASTNodeIterator& operator=(ASTNodeIterator&& o) {
+    return *this = ASTNodeIterator(std::move(o.impl_));
+  }
+  ASTNodeIterator& operator=(const ASTNodeIterator& o) = delete;
+
+  inline ASTNodeIterator clone() const { return ASTNodeIterator(impl_->clone()); }
+
+  inline ASTNodeIterator operator++() { return ASTNodeIterator(impl_->operator++()); }
+  inline bool operator==(const ASTNodeIterator& other) const {
+    return impl_->operator==(*other.impl_);
+  }
+  inline bool operator!=(const ASTNodeIterator& other) const { return !(*this == other); }
+
+  inline Stmt& operator*() const { return impl_->operator*(); }
+  /// @brief sets the iterator to end and returns it
+  inline ASTNodeIterator& setToEnd() {
+    impl_->setToEnd();
+    return *this;
+  }
+  inline bool isVisitingRoot() const { return impl_->isVisitingRoot(); }
+  inline bool isEnd() const { return impl_->isEnd(); }
+  inline bool isVoidIter() const { return impl_->isVoidIter(); }
+
+  inline bool isTop() const { return impl_->isTop(); }
+  /// @brief returns the root of the AST covered by this iterator
+  inline const std::shared_ptr<Stmt>& getASTRoot() const { return impl_->getASTRoot(); }
 
   /// @brief returns a new ASTNodeIterator pointing to the same node of the first
   /// level of the AST but of switched visit type (only first-level or full).
-  ASTNodeIterator<ASTNode, !onlyFirstLevel,
-                  typename std::enable_if<std::is_base_of<Stmt, ASTNode>::value>::type>
+  inline ASTNodeIterator<static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>
+  toggleOnlyFirstLevelVisiting() const {
+    return ASTNodeIterator<static_cast<ASTNodeIteratorVisitKind>(
+        !static_cast<bool>(onlyFirstLevel))>(impl_->toggleOnlyFirstLevelVisiting());
+  }
+
+  /// @brief List of ancestors from tree root to parent of rootStmtIt_ (empty if this is the tree
+  /// root)
+  inline std::list<Stmt::StmtRangeType::iterator> getAncestors() const {
+    return impl_->getAncestors();
+  }
+
+private:
+  ASTNodeIterator(std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>&& impl)
+      : impl_(std::move(impl)) {}
+};
+
+/// @brief Iterator that vists the root node's subtree.
+/// @ingroup sir
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+class SubtreeIteratorImpl : public ASTNodeIteratorImpl<onlyFirstLevel> {
+  friend class ASTOps; // TODO iir_restructuring : remove
+  template <ASTNodeIteratorVisitKind K>
+  friend class ASTNodeIteratorImpl;
+  template <ASTNodeIteratorVisitKind K>
+  friend class SubtreeIteratorImpl;
+
+public:
+  SubtreeIteratorImpl(SubtreeIteratorImpl&&) = default;
+  SubtreeIteratorImpl(const SubtreeIteratorImpl& o) = delete;
+  SubtreeIteratorImpl& operator=(SubtreeIteratorImpl&& o) { return *this = std::move(o); }
+  SubtreeIteratorImpl& operator=(const SubtreeIteratorImpl& o) = delete;
+  ~SubtreeIteratorImpl() override = default;
+
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> clone() const;
+
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> operator++();
+  bool operator==(const ASTNodeIteratorImpl<onlyFirstLevel>& other) const;
+  bool operator==(const SubtreeIteratorImpl& other) const;
+  inline bool operator!=(const SubtreeIteratorImpl& other) const { return !(*this == other); }
+
+  SubtreeIteratorImpl& setToEnd();
+
+  Stmt& operator*() const;
+  inline bool isVisitingRoot() const { return restIterator_ == nullptr; }
+  inline bool isEnd() const {
+    return restIterator_->rootStmtIt_ == (*this->rootStmtIt_)->getChildren().end();
+  }
+  inline bool isVoidIter() const { return false; }
+
+  std::unique_ptr<ASTNodeIteratorImpl<
+      static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>>
   toggleOnlyFirstLevelVisiting() const;
 
-  // List of ancestors from tree root to parent of rootStmt_ (empty if this is the tree root)
-  inline const std::list<Stmt*> getAncestors() const {
-    return isVisitingRoot() ? std::list<Stmt*>()
-                            : std::list<Stmt*>(&rootStmt_) + restIterator_->getAncestors();
+  inline std::list<Stmt::StmtRangeType::iterator> getAncestors() const {
+    std::list<Stmt::StmtRangeType::iterator> list({this->rootStmtIt_});
+    list.splice(list.end(), restIterator_->getAncestors());
+    return isVisitingRoot() ? std::list<Stmt::StmtRangeType::iterator>() : list;
   }
 
 protected:
-  ASTNodeIterator(Stmt& root, bool isTop) : rootStmt_(root), isTop_(isTop) {
-    // If iterating only through the first level, need to skip root.
-    if(isTop && onlyFirstLevel)
-      operator++();
-  }
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> restIterator_ =
+      nullptr; // Lazy allocation. nullptr means visiting root.
 
-  template <bool isTopLevel>
-  static std::unique_ptr<ASTNodeIterator> CreateInstance(Stmt& root);
-
-private:
-  inline bool isChildrenIteratorAtEnd() const {
-    return childrenIterator_ == rootStmt_.getChildren().end();
+  SubtreeIteratorImpl(Stmt::StmtRangeType::iterator rootStmtIt, const bool isTop)
+      : ASTNodeIteratorImpl<onlyFirstLevel>(rootStmtIt, isTop) {
+    if(isTop && static_cast<bool>(onlyFirstLevel))
+      operator++(); // If iterating only through the first level, need to skip root.
   }
-  void setupRestIterator();
 };
 
 /// @brief Iterator that only vists the root node and not its children.
 /// @ingroup sir
-template <typename ASTNode, bool onlyFirstLevel>
-class ASTVoidIterator : public ASTNodeIterator_Stmt {
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+class VoidIteratorImpl : public ASTNodeIteratorImpl<onlyFirstLevel> {
   bool isEnd_ = false;
-  friend class ASTNodeIterator_Stmt;
+  friend class ASTOps; // TODO iir_restructuring : remove
+  template <ASTNodeIteratorVisitKind O>
+  friend class ASTNodeIteratorImpl;
+  template <ASTNodeIteratorVisitKind O>
+  friend class VoidIteratorImpl;
 
 public:
-  ASTVoidIterator(ASTVoidIterator&&) = default;
-  ASTVoidIterator(const ASTVoidIterator& o) = delete;
-  ASTVoidIterator& operator=(ASTVoidIterator&& o) { *this = std::move(o); }
-  ASTVoidIterator& operator=(const ASTVoidIterator& o) = delete;
+  VoidIteratorImpl(VoidIteratorImpl&&) = default;
+  VoidIteratorImpl(const VoidIteratorImpl& o) = delete;
+  VoidIteratorImpl& operator=(VoidIteratorImpl&& o) = default;
+  VoidIteratorImpl& operator=(const VoidIteratorImpl& o) = delete;
+  ~VoidIteratorImpl() override = default;
 
-  ASTVoidIterator clone() const;
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> clone() const;
 
-  ASTVoidIterator& operator++();
-  bool operator==(const ASTVoidIterator& other) const;
-  inline ASTVoidIterator& setToEnd() {
+  std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> operator++();
+  bool operator==(const ASTNodeIteratorImpl<onlyFirstLevel>& other) const;
+  bool operator==(const VoidIteratorImpl& other) const;
+  inline bool operator!=(const VoidIteratorImpl& other) const { return !(*this == other); }
+
+  inline VoidIteratorImpl& setToEnd() {
     isEnd_ = true;
     return *this;
   }
-  inline Stmt& operator*() { return this->rootStmt_; }
+  inline Stmt& operator*() const { return **this->rootStmtIt_; }
+  inline bool isVisitingRoot() const { return !isEnd_; }
   inline bool isEnd() const { return isEnd_; }
   inline bool isVoidIter() const { return true; }
 
+  std::unique_ptr<ASTNodeIteratorImpl<
+      static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>>
+  toggleOnlyFirstLevelVisiting() const;
+
+  inline std::list<Stmt::StmtRangeType::iterator> getAncestors() const {
+    return isVisitingRoot() ? std::list<Stmt::StmtRangeType::iterator>()
+                            : std::list<Stmt::StmtRangeType::iterator>({this->rootStmtIt_});
+  }
+
 protected:
-  ASTVoidIterator(Stmt& root, bool isTop) : ASTNodeIterator_Stmt(root, isTop) {}
+  VoidIteratorImpl(Stmt::StmtRangeType::iterator rootStmtIt, const bool isTop)
+      : ASTNodeIteratorImpl<onlyFirstLevel>(rootStmtIt, isTop) {
+    if(isTop && static_cast<bool>(onlyFirstLevel))
+      setToEnd(); // If iterating only through the first level, need to skip root.
+  }
 };
 
-template <typename RootNode, bool onlyFirstLevel>
-class ASTRange : public IteratorRange<ASTNodeIterator<RootNode, onlyFirstLevel>> {
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+class ASTRange : public IteratorRange<ASTNodeIterator<onlyFirstLevel>> {
 public:
-  using Iterator = ASTNodeIterator<RootNode, onlyFirstLevel>;
-  ASTRange(RootNode& root)
+  using Iterator = ASTNodeIterator<onlyFirstLevel>;
+  ASTRange(const std::shared_ptr<Stmt>& root)
       : IteratorRange<Iterator>(std::move(Iterator::CreateInstance(root)),
                                 std::move(Iterator::CreateInstance(root).setToEnd())) {}
   ASTRange(const Iterator singleton)
@@ -155,20 +270,18 @@ public:
   ASTRange(const ASTRange&) = delete;
   ASTRange& operator=(ASTRange&& o) { *this = std::move(o); }
   ASTRange& operator=(const ASTRange&) = delete;
-
-  inline Stmt& operator[](int index) const { return *std::next(this->firstIt_, index); }
 };
 
-template <typename RootNode, bool onlyFirstLevel>
-ASTRange<RootNode, onlyFirstLevel> iterateASTOver(RootNode& root) {
-  return ASTRange<RootNode, onlyFirstLevel>(root);
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+ASTRange<onlyFirstLevel> iterateASTOver(const std::shared_ptr<Stmt>& root) {
+  return ASTRange<onlyFirstLevel>(root);
 }
 
 } // namespace dawn
 
 namespace std {
-template <typename GeneratorType, bool onlyFirstLevel, typename Enable>
-struct iterator_traits<dawn::ASTNodeIterator<GeneratorType, onlyFirstLevel, Enable>> {
+template <dawn::ASTNodeIteratorVisitKind onlyFirstLevel>
+struct iterator_traits<dawn::ASTNodeIterator<onlyFirstLevel>> {
   using difference_type =
       typename iterator_traits<typename dawn::BlockStmt::StatementList::iterator>::difference_type;
   using value_type = dawn::Stmt;
@@ -190,117 +303,161 @@ struct iterator_traits<dawn::ASTNodeIterator<GeneratorType, onlyFirstLevel, Enab
 namespace dawn {
 
 //
-//  Definition of ASTNodeIterator_Stmt
+//  Definition of ASTNodeIteratorImpl
 //
 
-template <typename ASTNode, bool onlyFirstLevel>
-ASTNodeIterator_Stmt ASTNodeIterator_Stmt::clone() const {
-  ASTNodeIterator o(rootStmt_, isTop_);
-  o.childrenIterator_ = childrenIterator_;
-  o.restIterator_ = restIterator_ == nullptr ? nullptr
-                                             : std::unique_ptr<ASTNodeIterator>(new ASTNodeIterator(
-                                                   std::move(restIterator_->clone())));
-  return o;
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>
+ASTNodeIteratorImpl<onlyFirstLevel>::CreateInstance(const std::shared_ptr<Stmt>& root) {
+
+  Stmt::StmtRangeType singletonContainer(const_cast<std::shared_ptr<Stmt>&>(root));
+  return CreateTopLevelInstance(singletonContainer.begin());
 }
 
-template <typename ASTNode, bool onlyFirstLevel>
-ASTNodeIterator_Stmt& ASTNodeIterator_Stmt::operator++() {
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>
+ASTNodeIteratorImpl<onlyFirstLevel>::CreateTopLevelInstance(
+    Stmt::StmtRangeType::iterator rootStmtIt) {
+  if((*rootStmtIt)->getChildren().empty())
+    return std::unique_ptr<VoidIteratorImpl<onlyFirstLevel>>(
+        new VoidIteratorImpl<onlyFirstLevel>(rootStmtIt, true));
+  return std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>(
+      new SubtreeIteratorImpl<onlyFirstLevel>(rootStmtIt, true));
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>
+ASTNodeIteratorImpl<onlyFirstLevel>::CreateRestInstance(Stmt::StmtRangeType::iterator rootStmtIt) {
+  if((*rootStmtIt)->getChildren().empty())
+    return std::unique_ptr<VoidIteratorImpl<onlyFirstLevel>>(
+        new VoidIteratorImpl<onlyFirstLevel>(rootStmtIt, false));
+  using ASTNodeIteratorImplType =
+      typename std::conditional<static_cast<bool>(onlyFirstLevel),
+                                VoidIteratorImpl<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>,
+                                SubtreeIteratorImpl<onlyFirstLevel>>::type;
+  return std::unique_ptr<ASTNodeIteratorImplType>(new ASTNodeIteratorImplType(rootStmtIt, false));
+}
+
+//
+//  Definition of SubtreeIteratorImpl
+//
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>
+SubtreeIteratorImpl<onlyFirstLevel>::clone() const {
+  SubtreeIteratorImpl* o = new SubtreeIteratorImpl(this->rootStmtIt_, this->isTop_);
+  o->restIterator_ = restIterator_ == nullptr ? nullptr : std::move(restIterator_->clone());
+  return std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>(o);
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> SubtreeIteratorImpl<onlyFirstLevel>::
+operator++() {
   if(isVisitingRoot()) {
-    childrenIterator_ = rootStmt_.getChildren().begin();
-    setupRestIterator();
-    return *this;
+
+    restIterator_ = ASTNodeIteratorImpl<onlyFirstLevel>::CreateRestInstance(
+        (*this->rootStmtIt_)->getChildren().begin());
+    return this->clone();
   }
   if(!isEnd()) {
     if(restIterator_->isEnd()) {
-      childrenIterator_++;
-      setupRestIterator();
+      restIterator_ = ASTNodeIteratorImpl<onlyFirstLevel>::CreateRestInstance(
+          std::next(restIterator_->rootStmtIt_, 1));
     } else {
-      (*restIterator_).operator++();
+      restIterator_->operator++();
       if(restIterator_->isEnd())
         this->operator++();
     }
   }
 
+  return this->clone();
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+bool SubtreeIteratorImpl<onlyFirstLevel>::
+operator==(const ASTNodeIteratorImpl<onlyFirstLevel>& other) const {
+  if(other.isVoidIter())
+    return false;
+  return (*this == *dynamic_cast<SubtreeIteratorImpl const*>(&other));
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+bool SubtreeIteratorImpl<onlyFirstLevel>::operator==(const SubtreeIteratorImpl& other) const {
+  return this->isTop_ == other.isTop_ && this->rootStmtIt_ == other.rootStmtIt_ &&
+         *restIterator_ == *(other.restIterator_);
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+SubtreeIteratorImpl<onlyFirstLevel>& SubtreeIteratorImpl<onlyFirstLevel>::setToEnd() {
+  restIterator_ = ASTNodeIteratorImpl<onlyFirstLevel>::CreateRestInstance(
+      (*this->rootStmtIt_)->getChildren().end());
   return *this;
 }
 
-template <typename ASTNode, bool onlyFirstLevel>
-bool ASTNodeIterator_Stmt::operator==(const ASTNodeIterator_Stmt& other) const {
-  return (isVoidIter() == other.isVoidIter()) && isTop_ == other.isTop_ &&
-         (&getASTRoot() == &other.getASTRoot()) && (childrenIterator_ == other.childrenIterator_) &&
-         (&*restIterator_ == &*(other.restIterator_));
-}
-
-template <typename ASTNode, bool onlyFirstLevel>
-ASTNodeIterator_Stmt& ASTNodeIterator_Stmt::setToEnd() {
-  childrenIterator_ = rootStmt_.getChildren().end() - 1;
-  setupRestIterator();
-  restIterator_->setToEnd();
-  childrenIterator_ = rootStmt_.getChildren().end();
-  return *this;
-}
-
-template <typename ASTNode, bool onlyFirstLevel>
-Stmt& ASTNodeIterator_Stmt::operator*() const {
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+Stmt& SubtreeIteratorImpl<onlyFirstLevel>::operator*() const {
   if(isVisitingRoot())
-    return rootStmt_;
+    return **this->rootStmtIt_;
   return **restIterator_;
 }
 
-template <typename ASTNode, bool onlyFirstLevel>
-ASTNodeIterator<ASTNode, !onlyFirstLevel,
-                typename std::enable_if<std::is_base_of<Stmt, ASTNode>::value>::type>
-ASTNodeIterator<ASTNode, onlyFirstLevel,
-                typename std::enable_if<std::is_base_of<Stmt, ASTNode>::value>::type>::
-    toggleOnlyFirstLevelVisiting() const {
-  ASTNodeIterator<ASTNode, !onlyFirstLevel,
-                  typename std::enable_if<std::is_base_of<Stmt, ASTNode>::value>::type>
-      output(rootStmt_, true);
-  output.childrenIterator_ = childrenIterator_;
-  if(output.childrenIterator_)
-    output.setupRestIterator();
-  return output;
-}
-
-template <typename ASTNode, bool onlyFirstLevel>
-template <bool isTopLevel>
-std::unique_ptr<ASTNodeIterator_Stmt> ASTNodeIterator_Stmt::CreateInstance(Stmt& root) {
-  if(root.getChildren().empty())
-    return std::unique_ptr<ASTVoidIterator_Stmt>(new ASTVoidIterator_Stmt(root, isTopLevel));
-  using ConditionalType =
-      typename std::conditional<onlyFirstLevel && (!isTopLevel), ASTVoidIterator<ASTNode, true>,
-                                ASTNodeIterator>::type;
-  return std::unique_ptr<ConditionalType>(new ConditionalType(root, isTopLevel));
-}
-
-template <typename ASTNode, bool onlyFirstLevel>
-void ASTNodeIterator_Stmt::setupRestIterator() {
-  if(isChildrenIteratorAtEnd())
-    return;
-
-  restIterator_ = CreateInstance<false>(**childrenIterator_);
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<
+    ASTNodeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>>
+SubtreeIteratorImpl<onlyFirstLevel>::toggleOnlyFirstLevelVisiting() const {
+  auto* output = new SubtreeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(
+      !static_cast<bool>(onlyFirstLevel))>(this->rootStmtIt_, true);
+  output->restIterator_ =
+      restIterator_ == nullptr
+          ? nullptr
+          : SubtreeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(
+                onlyFirstLevel))>::CreateRestInstance(restIterator_->rootStmtIt_);
+  return std::unique_ptr<ASTNodeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(
+      !static_cast<bool>(onlyFirstLevel))>>(output);
 }
 
 //
-//  Definition of ASTVoidIterator_Stmt
+//  Definition of VoidIteratorImpl
 //
 
-template <typename ASTNode, bool onlyFirstLevel>
-ASTVoidIterator_Stmt ASTVoidIterator_Stmt::clone() const {
-  ASTVoidIterator o(this->rootStmt_, this->isTop_);
-  o.isEnd_ = this->isEnd_;
-  return o;
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>
+VoidIteratorImpl<onlyFirstLevel>::clone() const {
+  VoidIteratorImpl* o = new VoidIteratorImpl(this->rootStmtIt_, this->isTop_);
+  o->isEnd_ = isEnd_;
+  return std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>(o);
 }
 
-template <typename ASTNode, bool onlyFirstLevel>
-ASTVoidIterator_Stmt& ASTVoidIterator_Stmt::operator++() {
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> VoidIteratorImpl<onlyFirstLevel>::
+operator++() {
   isEnd_ = true;
-  return *this;
+  return this->clone();
 }
 
-template <typename ASTNode, bool onlyFirstLevel>
-bool ASTVoidIterator_Stmt::operator==(const ASTVoidIterator& other) const {
-  return (&this->getASTRoot() == &other.getASTRoot()) && this->isEnd_ == other.isEnd_;
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+bool VoidIteratorImpl<onlyFirstLevel>::
+operator==(const ASTNodeIteratorImpl<onlyFirstLevel>& other) const {
+  if(!other.isVoidIter())
+    return false;
+  return (*this == *dynamic_cast<VoidIteratorImpl const*>(&other));
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+bool VoidIteratorImpl<onlyFirstLevel>::operator==(const VoidIteratorImpl& other) const {
+  return this->isTop_ == other.isTop_ && this->rootStmtIt_ == other.rootStmtIt_ &&
+         isEnd_ == other.isEnd_;
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+std::unique_ptr<
+    ASTNodeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(!static_cast<bool>(onlyFirstLevel))>>
+VoidIteratorImpl<onlyFirstLevel>::toggleOnlyFirstLevelVisiting() const {
+  auto* output = new VoidIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(
+      !static_cast<bool>(onlyFirstLevel))>(this->rootStmtIt_, true);
+  output->isEnd_ = isEnd_;
+  return std::unique_ptr<ASTNodeIteratorImpl<static_cast<ASTNodeIteratorVisitKind>(
+      !static_cast<bool>(onlyFirstLevel))>>(output);
 }
 
 } // namespace dawn
