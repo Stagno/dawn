@@ -43,9 +43,12 @@ template <>
 ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>
 ASTOps::insertAfter(std::shared_ptr<Stmt> stmt,
                     ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>& node) {
-
-  DAWN_ASSERT(node.getASTRoot()->getKind() == Stmt::SK_BlockStmt);
-  DAWN_ASSERT(node.isTop());
+  if(node.getASTRoot()->getKind() != Stmt::SK_BlockStmt)
+    throw std::runtime_error(
+        "ASTOps::insertAfter called with 'node' iterator whose root is not a 'BlockStmt'");
+  if(!node.isTop())
+    throw std::runtime_error(
+        "ASTOps::insertAfter called with 'node' iterator which is not top-level");
   DAWN_ASSERT(stmt);
   std::vector<std::shared_ptr<Stmt>>& children =
       std::dynamic_pointer_cast<BlockStmt>(node.getASTRoot())->getStatements();
@@ -57,8 +60,7 @@ ASTOps::insertAfter(std::shared_ptr<Stmt> stmt,
     // if iterator (node) is void it must be recreated as non-void
     if(node.isVoidIter())
       node = std::move(
-          ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>::CreateInstance(
-              node.getASTRoot()));
+          makeASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(node.getASTRoot()));
 
     // input iterator (node) must be kept at end
     node.setToEnd();

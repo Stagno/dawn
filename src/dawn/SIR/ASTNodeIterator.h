@@ -149,6 +149,10 @@ private:
   ASTNodeIterator(std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>>&& impl)
       : impl_(std::move(impl)) {}
 };
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+ASTNodeIterator<onlyFirstLevel> makeASTNodeIterator(const std::shared_ptr<Stmt>& root) {
+  return ASTNodeIterator<onlyFirstLevel>::CreateInstance(root);
+}
 
 /// @brief Iterator that vists the root node's subtree.
 /// @ingroup sir
