@@ -43,41 +43,48 @@ public:
   static constexpr const char* name = "DoMethod";
 
   using ASTStmtToSAPMapType = std::unordered_map<const Stmt*, StatementAccessesPair>;
-  using FullASTConstIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
+  using FullASTIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
+  using FullASTConstIterator = ASTNodeConstIterator<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
   using FullASTRange = ASTRange<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
-  using StmtsConstIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using FullASTConstRange = ASTConstRange<ASTNodeIteratorVisitKind::FULL_AST_VISIT>;
+  using StmtsIterator = ASTNodeIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using StmtsConstIterator = ASTNodeConstIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
   using StmtsRange = ASTRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
-  using SAPConstIterator =
+  using StmtsConstRange = ASTConstRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using SAPIterator =
       StatementAccessesPairIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using SAPConstIterator =
+      StatementAccessesPairConstIterator<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
   using SAPRange = StatementAccessesPairRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
+  using SAPConstRange =
+      StatementAccessesPairConstRange<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>;
 
   /// @name Constructors and Assignment
   /// @{
 
   /// @brief Constructor for empty DoMethod
-  DoMethod(Interval interval, const StencilMetaInformation& metaData);
+  DoMethod(Interval interval, StencilMetaInformation& metaData);
 
   // TODO iir_restructuring whether the domethod is of a function or of a stencil it should be
   // transparent here. Also this constructor leaves the DoMethod in an inconsistent state! Need
   // refactoring of StatementMapper!
   /// @brief Constructor for function's DoMethod
-  DoMethod(Interval interval, const StencilMetaInformation& metaData,
-           const std::shared_ptr<AST> ast);
+  DoMethod(Interval interval, StencilMetaInformation& metaData, const std::shared_ptr<AST> ast);
 
   /// @brief Constructor for stencil's DoMethod filled with statements (in the iterator range) from
   /// another DoMethod.
-  DoMethod(Interval interval, const StencilMetaInformation& metaData,
-           IteratorRange<SAPConstIterator> saps);
+  DoMethod(Interval interval, StencilMetaInformation& metaData, IteratorRange<SAPIterator> saps);
   /// @brief Constructor for stencil's DoMethod with AST (also creates necessary AccessIDs and
   /// computes accesses)
-  DoMethod(Interval interval, const StencilMetaInformation& metaData,
-           const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
+  DoMethod(Interval interval, const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
            const std::shared_ptr<iir::StencilInstantiation>& instantiation,
            const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
            const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap);
   DoMethod(DoMethod&&) = default;
   DoMethod& operator=(DoMethod&&) = default;
   /// @}
+
+  ~DoMethod();
 
   json::json jsonDump(const StencilMetaInformation& metaData) const;
 
@@ -86,49 +93,53 @@ public:
 
   /// @name Iterators
   /// /// @{
-  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
-  /// to root
-  inline FullASTConstIterator const astBegin() const {
-    return FullASTRange(ast_->getRoot()).begin();
+  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod
+  /// pointing to root
+  inline FullASTIterator astBegin() { return FullASTRange(ast_->getRoot()).begin(); }
+  inline FullASTConstIterator astConstBegin() const {
+    return FullASTConstRange(ast_->getRoot()).begin();
   }
-  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod pointing
-  /// to the end (after the last statement of the tree)
-  inline FullASTConstIterator const astEnd() const {
-    return iterateASTOver<ASTNodeIteratorVisitKind::FULL_AST_VISIT>(ast_->getRoot()).end();
+  /// @brief returns a depth-first pre-order iterator through the whole AST of the DoMethod
+  /// pointing to the end (after the last statement of the tree)
+  inline FullASTIterator astEnd() { return FullASTRange(ast_->getRoot()).end(); }
+  inline FullASTConstIterator astConstEnd() const {
+    return FullASTConstRange(ast_->getRoot()).end();
   }
   /// @brief returns a depth-first pre-order iterator range through the whole AST of the DoMethod
-  inline FullASTRange astRange() const {
-    return iterateASTOver<ASTNodeIteratorVisitKind::FULL_AST_VISIT>(ast_->getRoot());
+  inline FullASTRange astRange() { return FullASTRange(ast_->getRoot()); }
+  inline FullASTConstRange astConstRange() const { return FullASTConstRange(ast_->getRoot()); }
+  /// @brief returns a iterator through the statements of the first level of the AST of
+  /// the DoMethod pointing to the first one
+  inline StmtsIterator stmtsBegin() { return StmtsRange(ast_->getRoot()).begin(); }
+  inline StmtsConstIterator stmtsConstBegin() const {
+    return StmtsConstRange(ast_->getRoot()).begin();
   }
-  /// @brief returns an iterator through the statements of the first level of the AST of the
-  /// DoMethod pointing to the first one
-  inline StmtsConstIterator const stmtsBegin() const {
-    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot())
-        .begin();
-  }
-  /// @brief returns an iterator through the statements of the first level of the AST of the
-  /// DoMethod pointing to the end (after the last statement)
-  inline StmtsConstIterator const stmtsEnd() const {
-    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot()).end();
-  }
+  /// @brief returns a iterator through the statements of the first level of the AST of
+  /// the DoMethod pointing to the end (after the last statement)
+  inline StmtsIterator stmtsEnd() { return StmtsRange(ast_->getRoot()).end(); }
+  inline StmtsConstIterator stmtsConstEnd() const { return StmtsConstRange(ast_->getRoot()).end(); }
   /// @brief returns an iterator range through the statements of the first level of the AST of the
   /// DoMethod
-  inline StmtsRange stmtsRange() const {
-    return iterateASTOver<ASTNodeIteratorVisitKind::ONLY_FIRST_LEVEL_VISIT>(ast_->getRoot());
+  inline StmtsRange stmtsRange() { return StmtsRange(ast_->getRoot()); }
+  inline StmtsConstRange stmtsConstRange() const { return StmtsConstRange(ast_->getRoot()); }
+  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the
+  /// first level of the AST of the DoMethod pointing to the first one
+  inline SAPIterator sapBegin() { return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).begin(); }
+  inline SAPConstIterator sapConstBegin() const {
+    return SAPConstRange(ast_->getRoot(), ASTStmtToSAPMap_).begin();
   }
-  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
-  /// level of the AST of the DoMethod pointing to the first one
-  inline SAPConstIterator const sapBegin() const {
-    return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).begin();
-  }
-  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the first
-  /// level of the AST of the DoMethod pointing to the end (after the last statement)
-  inline SAPConstIterator const sapEnd() const {
-    return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).end();
+  /// @brief returns an iterator through the StatementAccessesPairs of the statements of the
+  /// first level of the AST of the DoMethod pointing to the end (after the last statement)
+  inline SAPIterator sapEnd() { return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_).end(); }
+  inline SAPConstIterator sapConstEnd() const {
+    return SAPConstRange(ast_->getRoot(), ASTStmtToSAPMap_).end();
   }
   /// @brief returns an iterator range through the StatementAccessesPairs of the statements of the
   /// first level of the AST of the DoMethod
-  inline SAPRange sapRange() const { return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_); }
+  inline SAPRange sapRange() { return SAPRange(ast_->getRoot(), ASTStmtToSAPMap_); }
+  inline SAPConstRange sapConstRange() const {
+    return SAPConstRange(ast_->getRoot(), ASTStmtToSAPMap_);
+  }
   /// @}
 
   /// @name Getters
@@ -167,10 +178,17 @@ public:
   // insertStatements (in any position) with iterators
   /// @brief inserts a statement (pointed by the input iterator) and its accesses info at the end of
   /// the method
-  void appendStatement(SAPConstIterator sap);
-  /// @brief inserts statements (pointed by the iterator range) and their accessess info at the end
+  void appendStatement(SAPIterator sap);
+  /// @brief inserts statements (pointed by the iterator range) and their accesses info at the end
   /// of the method
-  void appendStatements(IteratorRange<SAPConstIterator> saps);
+  void appendStatements(IteratorRange<SAPIterator> saps);
+
+  /// @brief moves n consecutive statements (starting from iterator 'from') and their accesses info
+  /// before statement pointed by 'to'. Iterators 'from' and 'to' should be rooted at the roots of
+  /// DoMethods (respectively) 'originDoMethod' and 'destinationDoMethod', which should not be the
+  /// same.
+  static void moveStatementsBefore(StmtsIterator from, DoMethod& originDoMethod, StmtsIterator to,
+                                   DoMethod& destinationDoMethod, int n);
 
   virtual void clearDerivedInfo() override;
 
@@ -212,8 +230,9 @@ public:
   virtual void updateLevel() override;
 
 private:
-  StmtsConstIterator insertStatementAfterImpl(SAPConstIterator otherSapIt,
-                                              StmtsConstIterator& insertionPointIt);
+  StmtsIterator insertStatementAfterImpl(SAPIterator otherSapIt, StmtsIterator& insertionPointIt);
+  static SAPIterator moveStatementBeforeImpl(StmtsIterator& from, DoMethod& originDoMethod,
+                                             StmtsIterator& to, DoMethod& destinationDoMethod);
 
   Interval interval_;
   long unsigned int id_;
@@ -232,7 +251,7 @@ private:
     std::shared_ptr<DependencyGraphAccesses> dependencyGraph_;
   };
 
-  const StencilMetaInformation& metaData_;
+  StencilMetaInformation& metaData_;
   const std::shared_ptr<AST> ast_;
   ASTStmtToSAPMapType ASTStmtToSAPMap_;
   DerivedInfo derivedInfo_;

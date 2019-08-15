@@ -656,7 +656,7 @@ void StencilFunctionInstantiation::dump() const {
   for(std::size_t i = 0; i < statements.size(); ++i) {
     std::cout << "\e[1m" << ASTStringifer::toString(statements[i], 2 * DAWN_PRINT_INDENT)
               << "\e[0m";
-    auto sap = *(std::next(doMethod_->sapBegin().clone(), i));
+    auto sap = *(std::next(doMethod_->sapBegin(), i));
     if(sap.getCallerAccesses())
       std::cout << sap.getCallerAccesses()->toString(this, 3 * DAWN_PRINT_INDENT) << "\n";
   }

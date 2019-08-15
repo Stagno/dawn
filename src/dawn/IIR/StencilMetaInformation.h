@@ -166,6 +166,10 @@ public:
     BoundaryConditionToExtentsMap_.emplace(bc, extents);
   }
 
+  void eraseBoundaryConditiontoExtentPair(const std::shared_ptr<BoundaryConditionDeclStmt>& stmt) {
+    BoundaryConditionToExtentsMap_.erase(stmt);
+  }
+
   /// @brief get a stencil function instantiation by StencilFunCallExpr
   const std::shared_ptr<StencilFunctionInstantiation>
   getStencilFunctionInstantiation(const std::shared_ptr<StencilFunCallExpr>& expr) const;
@@ -195,6 +199,8 @@ public:
   void setAccessIDNamePair(int accessID, const std::string& name);
 
   void insertStencilCallStmt(std::shared_ptr<StencilCallDeclStmt> stmt, int stencilID);
+
+  void removeLiteral(int AccessID);
 
   /// @brief Remove the field, variable or literal given by `AccessID`
   void removeAccessID(int AccesssID);
@@ -234,6 +240,7 @@ public:
   void insertFieldBC(std::string name, const std::shared_ptr<BoundaryConditionDeclStmt>& bc) {
     fieldnameToBoundaryConditionMap_.emplace(name, bc);
   }
+  void removeFieldBC(std::string name) { fieldnameToBoundaryConditionMap_.erase(name); }
 
   bool isFieldType(FieldAccessType accessType) const;
   void setStencilname(const std::string& name) { stencilName_ = name; }

@@ -39,9 +39,7 @@ void DependencyGraphAccesses::insertStatementAccessesPair(
       insertNode(writeAccess.first);
 
       for(const auto& readAccess : stmtAccessPair.getAccesses()->getReadAccesses())
-        if(stmtAccessPair.hasBlockStatements()) {
-          insertEdge(writeAccess.first, readAccess.first, readAccess.second);
-        }
+        insertEdge(writeAccess.first, readAccess.first, readAccess.second);
     }
   }
 }

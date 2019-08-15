@@ -27,6 +27,11 @@ enum class ASTNodeIteratorVisitKind : bool {
   ONLY_FIRST_LEVEL_VISIT = true
 };
 
+enum class ASTNodeIteratorConstQualification : bool {
+  NON_CONST_ITERATOR = false,
+  CONST_ITERATOR = true
+};
+
 /// @brief Pre-order visiting iterator through the Stmts of an AST. Generated from a root Stmt.
 /// Depending on onlyFirstLevel parameter the visit is/isn't limited to the first level (also
 /// excluding root) of the AST.
@@ -90,10 +95,12 @@ protected:
       : rootStmtIt_(rootStmtIt), isTop_(isTop) {}
 };
 
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
+template <ASTNodeIteratorVisitKind onlyFirstLevel,
+          ASTNodeIteratorConstQualification isConstIterator =
+              ASTNodeIteratorConstQualification::NON_CONST_ITERATOR>
 class ASTNodeIterator {
   friend class ASTOps; // TODO iir_restructuring : remove
-  template <ASTNodeIteratorVisitKind K>
+  template <ASTNodeIteratorVisitKind K, ASTNodeIteratorConstQualification I>
   friend class ASTNodeIterator;
   std::unique_ptr<ASTNodeIteratorImpl<onlyFirstLevel>> impl_;
 
@@ -117,7 +124,10 @@ public:
   }
   inline bool operator!=(const ASTNodeIterator& other) const { return !(*this == other); }
 
-  inline Stmt& operator*() const { return impl_->operator*(); }
+  inline typename std::conditional<static_cast<bool>(isConstIterator), const Stmt&, Stmt&>::type
+  operator*() const {
+    return impl_->operator*();
+  }
   /// @brief sets the iterator to end and returns it
   inline ASTNodeIterator& setToEnd() {
     impl_->setToEnd();
@@ -153,6 +163,10 @@ template <ASTNodeIteratorVisitKind onlyFirstLevel>
 ASTNodeIterator<onlyFirstLevel> makeASTNodeIterator(const std::shared_ptr<Stmt>& root) {
   return ASTNodeIterator<onlyFirstLevel>::CreateInstance(root);
 }
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+using ASTNodeConstIterator =
+    ASTNodeIterator<onlyFirstLevel, ASTNodeIteratorConstQualification::CONST_ITERATOR>;
 
 /// @brief Iterator that vists the root node's subtree.
 /// @ingroup sir
@@ -259,10 +273,12 @@ protected:
   }
 };
 
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
-class ASTRange : public IteratorRange<ASTNodeIterator<onlyFirstLevel>> {
+template <ASTNodeIteratorVisitKind onlyFirstLevel,
+          ASTNodeIteratorConstQualification isConstIterator =
+              ASTNodeIteratorConstQualification::NON_CONST_ITERATOR>
+class ASTRange : public IteratorRange<ASTNodeIterator<onlyFirstLevel, isConstIterator>> {
 public:
-  using Iterator = ASTNodeIterator<onlyFirstLevel>;
+  using Iterator = ASTNodeIterator<onlyFirstLevel, isConstIterator>;
   ASTRange(const std::shared_ptr<Stmt>& root)
       : IteratorRange<Iterator>(std::move(Iterator::CreateInstance(root)),
                                 std::move(Iterator::CreateInstance(root).setToEnd())) {}
@@ -277,20 +293,32 @@ public:
 };
 
 template <ASTNodeIteratorVisitKind onlyFirstLevel>
+using ASTConstRange = ASTRange<onlyFirstLevel, ASTNodeIteratorConstQualification::CONST_ITERATOR>;
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
 ASTRange<onlyFirstLevel> iterateASTOver(const std::shared_ptr<Stmt>& root) {
   return ASTRange<onlyFirstLevel>(root);
+}
+
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+ASTConstRange<onlyFirstLevel> constIterateASTOver(const std::shared_ptr<Stmt>& root) {
+  return ASTConstRange<onlyFirstLevel>(root);
 }
 
 } // namespace dawn
 
 namespace std {
-template <dawn::ASTNodeIteratorVisitKind onlyFirstLevel>
-struct iterator_traits<dawn::ASTNodeIterator<onlyFirstLevel>> {
+template <dawn::ASTNodeIteratorVisitKind onlyFirstLevel,
+          dawn::ASTNodeIteratorConstQualification isConstIterator>
+struct iterator_traits<dawn::ASTNodeIterator<onlyFirstLevel, isConstIterator>> {
   using difference_type =
       typename iterator_traits<typename dawn::BlockStmt::StatementList::iterator>::difference_type;
-  using value_type = dawn::Stmt;
-  using pointer = dawn::Stmt*;
-  using reference = dawn::Stmt&;
+  using value_type = typename std::conditional<static_cast<bool>(isConstIterator), const dawn::Stmt,
+                                               dawn::Stmt>::type;
+  using pointer = typename std::conditional<static_cast<bool>(isConstIterator), const dawn::Stmt*,
+                                            dawn::Stmt*>::type;
+  using reference = typename std::conditional<static_cast<bool>(isConstIterator), const dawn::Stmt&,
+                                              dawn::Stmt&>::type;
   using iterator_category = std::input_iterator_tag;
 };
 
@@ -449,7 +477,7 @@ operator==(const ASTNodeIteratorImpl<onlyFirstLevel>& other) const {
 
 template <ASTNodeIteratorVisitKind onlyFirstLevel>
 bool VoidIteratorImpl<onlyFirstLevel>::operator==(const VoidIteratorImpl& other) const {
-  return this->isTop_ == other.isTop_ && this->rootStmtIt_ == other.rootStmtIt_ &&
+  return this->isTop() == other.isTop_ && this->rootStmtIt_ == other.rootStmtIt_ &&
          isEnd_ == other.isEnd_;
 }
 

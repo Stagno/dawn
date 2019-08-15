@@ -18,6 +18,7 @@
 #include "dawn/IIR/AccessToNameMapper.h"
 #include "dawn/IIR/Accesses.h"
 #include "dawn/IIR/IIRNode.h"
+#include "dawn/IIR/StatementAccessesPairIteratorDecl.h"
 #include "dawn/SIR/ASTNodeIterator.h"
 #include "dawn/SIR/Statement.h"
 #include <boost/optional.hpp>
@@ -25,12 +26,6 @@
 #include <vector>
 
 namespace dawn {
-
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
-class StatementAccessesPairIterator;
-
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
-class StatementAccessesPairRange;
 
 namespace iir {
 

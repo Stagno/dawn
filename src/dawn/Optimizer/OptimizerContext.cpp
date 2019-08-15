@@ -361,7 +361,7 @@ public:
                        : LoopOrderKind::LK_Backward);
     std::unique_ptr<Stage> stage = make_unique<Stage>(metadata_, instantiation_->nextUID());
     DAWN_LOG(INFO) << "Processing vertical region at " << verticalRegion->Loc;
-    stage->insertChild(make_unique<DoMethod>(interval, metadata_, ast, sir_, instantiation_,
+    stage->insertChild(make_unique<DoMethod>(interval, ast, sir_, instantiation_,
                                              scope_.top()->StackTrace,
                                              scope_.top()->LocalFieldnameToAccessIDMap));
     // old_TODO: move iterators of IIRNode to const getChildren, when we pass here begin, end

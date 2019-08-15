@@ -30,7 +30,6 @@ yoda_add_library(
           Accesses.h
           AccessToNameMapper.cpp
           AccessToNameMapper.h
-          StatementAccessesPairIterator.h
           Cache.cpp
           Cache.h
           ControlFlowDescriptor.cpp
@@ -73,6 +72,8 @@ yoda_add_library(
           Stage.h
           StatementAccessesPair.cpp
           StatementAccessesPair.h
+          StatementAccessesPairIterator.h
+          StatementAccessesPairIteratorDecl.h
           Stencil.cpp
           Stencil.h
           StencilFunctionInstantiation.cpp

@@ -162,9 +162,8 @@ int StencilInstantiation::createVersionAndRename(int AccessID, Stencil* stencil,
   // Recompute the accesses of the current statement (only works with single Do-Methods - for now)
   auto& singleDoMethod = stencil->getStage(curStageIdx)->getSingleDoMethod();
 
-  computeAccesses(
-      this, singleDoMethod.getASTStmtToSAPMap(),
-      iir::DoMethod::SAPRange(std::next(singleDoMethod.sapBegin().clone(), curStmtIdx)));
+  computeAccesses(this, singleDoMethod.getASTStmtToSAPMap(),
+                  iir::DoMethod::SAPRange(std::next(singleDoMethod.sapBegin(), curStmtIdx)));
 
   // Rename the statement and accesses
   for(int stageIdx = curStageIdx;
@@ -177,12 +176,10 @@ int StencilInstantiation::createVersionAndRename(int AccessID, Stencil* stencil,
       for(int i = dir == RD_Above ? (curStmtIdx - 1) : (curStmtIdx + 1);
           dir == RD_Above ? (i >= 0) : (i < doMethod.getStmts().size());
           dir == RD_Above ? (--i) : (++i)) {
-        renameAccessIDInStmts(
-            &metadata_, AccessID, newAccessID,
-            iir::DoMethod::StmtsRange(std::next(doMethod.stmtsBegin().clone(), i)));
-        renameAccessIDInAccesses(
-            &metadata_, AccessID, newAccessID,
-            iir::DoMethod::SAPRange(std::next(doMethod.sapBegin().clone(), i)));
+        renameAccessIDInStmts(&metadata_, AccessID, newAccessID,
+                              iir::DoMethod::StmtsRange(std::next(doMethod.stmtsBegin(), i)));
+        renameAccessIDInAccesses(&metadata_, AccessID, newAccessID,
+                                 iir::DoMethod::SAPRange(std::next(doMethod.sapBegin(), i)));
       }
 
     } else {

@@ -18,7 +18,7 @@
 #include "dawn/IIR/IIRNode.h"
 #include "dawn/IIR/IIRNodeIterator.h"
 #include "dawn/IIR/StatementAccessesPair.h"
-#include "dawn/SIR/ASTNodeIterator.h"
+#include "dawn/IIR/StatementAccessesPairIteratorDecl.h"
 #include "dawn/Support/IteratorRange.h"
 #include <unordered_map>
 
@@ -28,7 +28,8 @@ namespace dawn {
 ///
 /// Built on top of an ASTNodeIterator that iterates through statements, requires a map from ASTStmt
 /// to StatementAccessesPair. Can either visit the first level of the AST or the whole AST.
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
+template <ASTNodeIteratorVisitKind onlyFirstLevel,
+          ASTNodeIteratorConstQualification isConstIterator>
 class StatementAccessesPairIterator {
 public:
   using WrappedIterator = ASTNodeIterator<onlyFirstLevel>;
@@ -53,7 +54,12 @@ public:
   }
   /// @brief returns a clone of the underlying ASTNodeIterator
   WrappedIterator base() const { return current_.clone(); }
-  inline iir::StatementAccessesPair& operator*() const { return ASTStmtToSAPMap_.at(&*current_); }
+  inline typename std::conditional<static_cast<bool>(isConstIterator),
+                                   const iir::StatementAccessesPair&,
+                                   iir::StatementAccessesPair&>::type
+  operator*() const {
+    return ASTStmtToSAPMap_.at(&*current_);
+  }
   StatementAccessesPairIterator& operator++() {
     ++current_;
     return *this;
@@ -84,20 +90,20 @@ private:
   ASTStmtToSAPMapType& ASTStmtToSAPMap_;
 };
 
-template <ASTNodeIteratorVisitKind onlyFirstLevel>
+template <ASTNodeIteratorVisitKind onlyFirstLevel,
+          ASTNodeIteratorConstQualification isConstIterator>
 class StatementAccessesPairRange
-    : public IteratorRange<StatementAccessesPairIterator<onlyFirstLevel>> {
+    : public IteratorRange<StatementAccessesPairIterator<onlyFirstLevel, isConstIterator>> {
 public:
-  using Iterator = StatementAccessesPairIterator<onlyFirstLevel>;
+  using Iterator = StatementAccessesPairIterator<onlyFirstLevel, isConstIterator>;
 
   StatementAccessesPairRange(const std::shared_ptr<Stmt>& root,
                              const typename Iterator::ASTStmtToSAPMapType& ASTStmtToSAPMap)
-      : IteratorRange<StatementAccessesPairIterator<onlyFirstLevel>>(
-            std::move(Iterator(root, ASTStmtToSAPMap)),
-            std::move(Iterator(root, ASTStmtToSAPMap).setToEnd())) {}
+      : IteratorRange<Iterator>(std::move(Iterator(root, ASTStmtToSAPMap)),
+                                std::move(Iterator(root, ASTStmtToSAPMap).setToEnd())) {}
   StatementAccessesPairRange(const Iterator& singleton)
-      : IteratorRange<StatementAccessesPairIterator<onlyFirstLevel>>(
-            std::move(Iterator(singleton.clone())), std::move(++Iterator(singleton.clone()))) {}
+      : IteratorRange<Iterator>(std::move(Iterator(singleton.clone())),
+                                std::move(++Iterator(singleton.clone()))) {}
 
   StatementAccessesPairRange(StatementAccessesPairRange&&) = default;
   StatementAccessesPairRange(const StatementAccessesPairRange&) = delete;
@@ -113,16 +119,31 @@ StatementAccessesPairRange<onlyFirstLevel> iterateStatementAccessesPairOver(
   return StatementAccessesPairRange<onlyFirstLevel>(root, ASTStmtToSAPMap);
 }
 
+template <ASTNodeIteratorVisitKind onlyFirstLevel>
+StatementAccessesPairConstRange<onlyFirstLevel> constIterateStatementAccessesPairOver(
+    const std::shared_ptr<Stmt>& root,
+    typename StatementAccessesPairConstRange<onlyFirstLevel>::Iterator::ASTStmtToSAPMapType&
+        ASTStmtToSAPMap) {
+  return StatementAccessesPairConstRange<onlyFirstLevel>(root, ASTStmtToSAPMap);
+}
+
 } // namespace dawn
 
 namespace std {
-template <dawn::ASTNodeIteratorVisitKind onlyFirstLevel>
-struct iterator_traits<dawn::StatementAccessesPairIterator<onlyFirstLevel>> {
+template <dawn::ASTNodeIteratorVisitKind onlyFirstLevel,
+          dawn::ASTNodeIteratorConstQualification isConstIterator>
+struct iterator_traits<dawn::StatementAccessesPairIterator<onlyFirstLevel, isConstIterator>> {
   using difference_type = typename iterator_traits<typename dawn::StatementAccessesPairIterator<
       onlyFirstLevel>::WrappedIterator>::difference_type;
-  using value_type = dawn::iir::StatementAccessesPair;
-  using pointer = dawn::iir::StatementAccessesPair*;
-  using reference = dawn::iir::StatementAccessesPair&;
+  using value_type = typename std::conditional<static_cast<bool>(isConstIterator),
+                                               const dawn::iir::StatementAccessesPair&,
+                                               dawn::iir::StatementAccessesPair&>::type;
+  using pointer = typename std::conditional<static_cast<bool>(isConstIterator),
+                                            const dawn::iir::StatementAccessesPair*,
+                                            dawn::iir::StatementAccessesPair*>::type;
+  using reference = typename std::conditional<static_cast<bool>(isConstIterator),
+                                              const dawn::iir::StatementAccessesPair&,
+                                              dawn::iir::StatementAccessesPair&>::type;
   using iterator_category = std::input_iterator_tag;
 };
 

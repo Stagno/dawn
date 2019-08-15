@@ -35,28 +35,64 @@
 namespace dawn {
 namespace iir {
 
-DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData)
-    : interval_(interval), id_(IndexGenerator::Instance().getIndex()), metaData_(metaData),
-      ASTStmtToSAPMap_() {}
+DoMethod::DoMethod(Interval interval, StencilMetaInformation& metaData)
+    : interval_(interval), id_(IndexGenerator::Instance().getIndex()), metaData_(metaData) {}
 
-DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
+DoMethod::DoMethod(Interval interval, StencilMetaInformation& metaData,
                    const std::shared_ptr<AST> ast)
     : interval_(interval), id_(IndexGenerator::Instance().getIndex()), metaData_(metaData),
-      ast_(ast), ASTStmtToSAPMap_() {}
+      ast_(ast) {}
 
-DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
-                   IteratorRange<SAPConstIterator> saps)
+DoMethod::DoMethod(Interval interval, StencilMetaInformation& metaData,
+                   IteratorRange<SAPIterator> saps)
     : DoMethod(interval, metaData) {
   appendStatements(std::move(saps));
 }
 
-DoMethod::DoMethod(Interval interval, const StencilMetaInformation& metaData,
-                   const std::shared_ptr<AST> ast, const std::shared_ptr<SIR>& fullSIR,
+DoMethod::DoMethod(Interval interval, const std::shared_ptr<AST> ast,
+                   const std::shared_ptr<SIR>& fullSIR,
                    const std::shared_ptr<iir::StencilInstantiation>& instantiation,
                    const std::shared_ptr<std::vector<sir::StencilCall*>>& stackTrace,
                    const std::unordered_map<std::string, int>& localFieldnameToAccessIDMap)
-    : DoMethod(interval, metaData) {
+    : DoMethod(interval, instantiation->getMetaData()) {
   fillWithAST(ast, fullSIR, instantiation, stackTrace, localFieldnameToAccessIDMap);
+}
+
+DoMethod::~DoMethod() {
+  // Remove the metadata that is only related to this DoMethod
+  class RemoveMetadata : public ASTVisitorForwarding, public NonCopyable {
+    StencilMetaInformation& metaData_;
+
+  public:
+    RemoveMetadata(StencilMetaInformation& metaData) : metaData_(metaData) {}
+    virtual void visit(const std::shared_ptr<LiteralAccessExpr>& expr) override {
+      int accessID = metaData_.getAccessIDFromExpr(expr);
+      metaData_.removeLiteral(accessID);
+      metaData_.eraseExprToAccessID(expr);
+    }
+    virtual void visit(const std::shared_ptr<VarDeclStmt>& stmt) override {
+      int accessID = metaData_.getAccessIDFromStmt(stmt);
+      metaData_.removeAccessID(accessID);
+      metaData_.eraseStmtToAccessID(stmt);
+    }
+    virtual void visit(const std::shared_ptr<VarAccessExpr>& expr) override {
+      metaData_.eraseExprToAccessID(expr);
+    }
+    virtual void visit(const std::shared_ptr<StencilFunCallExpr>& expr) override {
+      metaData_.removeStencilFunctionInstantiation(expr);
+    }
+    virtual void visit(const std::shared_ptr<StencilCallDeclStmt>& stmt) override {
+      metaData_.eraseStencilCallStmt(stmt);
+    }
+  };
+  //  TODO iir_restructuring: enable when code fixing metadata is complete!!
+  // WARNING: disabled for now!
+  // RemoveMetadata visitor(this->metaData_);
+  // ast_->accept(visitor);
+
+  // TODO iir_restructuring: what happens to temporary fields whose scope is reduced due to the
+  // loss of these statements? PassTemporaryType fixes it? What if this is the only DoMethod left in
+  // the scope of a temporary field?
 }
 
 // TODO check correctness of clone
@@ -83,7 +119,7 @@ void DoMethod::setDependencyGraph(const std::shared_ptr<DependencyGraphAccesses>
 boost::optional<Extents> DoMethod::computeMaximumExtents(const int accessID) const {
   boost::optional<Extents> extents;
 
-  for(auto& stmtAccess : sapRange()) {
+  for(auto& stmtAccess : sapConstRange()) {
     auto extents_ = stmtAccess.computeMaximumExtents(accessID, ASTStmtToSAPMap_);
     if(!extents_.is_initialized())
       continue;
@@ -136,41 +172,75 @@ void DoMethod::fillWithAST(
   computeAccesses(metaData_, ASTStmtToSAPMap_, sapRange());
 }
 
-DoMethod::StmtsConstIterator
-DoMethod::insertStatementAfterImpl(SAPConstIterator otherSapIt,
-                                   StmtsConstIterator& insertionPointIt) {
+DoMethod::StmtsIterator DoMethod::insertStatementAfterImpl(SAPIterator otherSapIt,
+                                                           StmtsIterator& insertionPointIt) {
   auto insertedOnlyFirstLevelIt =
       ASTOps::insertAfter((*otherSapIt).getStatement()->ASTStmt->clone(), insertionPointIt);
 
   auto insertedFullASTIt = insertedOnlyFirstLevelIt.toggleOnlyFirstLevelVisiting();
-  auto otherSapFullAstIt = otherSapIt.toggleOnlyFirstLevelVisiting();
+  auto otherSapFullASTIt = otherSapIt.toggleOnlyFirstLevelVisiting();
+  auto otherSapFullASTEndIt = (++otherSapIt).toggleOnlyFirstLevelVisiting();
 
-  for(; !otherSapFullAstIt.isEnd(); ++otherSapFullAstIt) {
-    ASTStmtToSAPMap_.emplace(&*insertedFullASTIt, std::move(*((*otherSapFullAstIt).clone())));
+  for(; otherSapFullASTIt != otherSapFullASTEndIt; ++otherSapFullASTIt) {
+    ASTStmtToSAPMap_.emplace(&*insertedFullASTIt, std::move(*((*otherSapFullASTIt).clone())));
     ++insertedFullASTIt;
   }
 
   return insertedOnlyFirstLevelIt;
 }
 
-void DoMethod::appendStatement(SAPConstIterator otherSapIt) {
+DoMethod::SAPIterator DoMethod::moveStatementBeforeImpl(StmtsIterator& from,
+                                                        DoMethod& originDoMethod, StmtsIterator& to,
+                                                        DoMethod& destinationDoMethod) {
+  DAWN_ASSERT(&originDoMethod != &destinationDoMethod);
+  DAWN_ASSERT(from.getASTRoot() == originDoMethod.ast_->getRoot());
+  DAWN_ASSERT(to.getASTRoot() == destinationDoMethod.ast_->getRoot());
+
+  auto fromStmtFullASTIt = from.toggleOnlyFirstLevelVisiting();
+  auto fromStmtFullASTEndIt = (++(from.clone())).toggleOnlyFirstLevelVisiting();
+
+  for(; fromStmtFullASTIt != fromStmtFullASTEndIt; ++fromStmtFullASTIt) {
+    auto key = &*fromStmtFullASTIt;
+    destinationDoMethod.ASTStmtToSAPMap_.emplace(
+        key, std::move(originDoMethod.ASTStmtToSAPMap_.at(key)));
+    originDoMethod.ASTStmtToSAPMap_.erase(key);
+  }
+  return SAPIterator(ASTOps::moveBefore(from, to), destinationDoMethod.ASTStmtToSAPMap_);
+}
+
+void DoMethod::appendStatement(SAPIterator otherSapIt) {
   DAWN_ASSERT(!otherSapIt.isEnd());
-  auto itEnd = stmtsEnd().clone();
-  insertStatementAfterImpl(std::move(otherSapIt), itEnd);
+  auto endIt = stmtsEnd();
+  insertStatementAfterImpl(std::move(otherSapIt), endIt);
 
   computeAccesses(metaData_, ASTStmtToSAPMap_, sapRange());
 }
 
-void DoMethod::appendStatements(IteratorRange<SAPConstIterator> otherSaps) {
-  auto insertionPointIt = stmtsEnd().clone();
-  for(SAPConstIterator otherSapIt = otherSaps.begin(); otherSapIt != otherSaps.end();
-      ++otherSapIt) {
+void DoMethod::appendStatements(IteratorRange<SAPIterator> otherSaps) {
+  auto insertionPointIt = stmtsEnd();
+  for(SAPIterator otherSapIt = otherSaps.begin(); otherSapIt != otherSaps.end(); ++otherSapIt) {
 
     auto insertedOnlyFirstLevelIt = insertStatementAfterImpl(otherSapIt.clone(), insertionPointIt);
 
     insertionPointIt = std::move(insertedOnlyFirstLevelIt);
   }
   computeAccesses(metaData_, ASTStmtToSAPMap_, sapRange());
+}
+
+void DoMethod::moveStatementsBefore(StmtsIterator from, DoMethod& originDoMethod, StmtsIterator to,
+                              DoMethod& destinationDoMethod, int n) {
+  DAWN_ASSERT(&originDoMethod != &destinationDoMethod);
+  DAWN_ASSERT(from.getASTRoot() == originDoMethod.ast_->getRoot());
+  DAWN_ASSERT(to.getASTRoot() == destinationDoMethod.ast_->getRoot());
+
+  for(int counter = 0; counter < n; counter++) {
+    moveStatementBeforeImpl(from, originDoMethod, to, destinationDoMethod);
+  }
+
+  computeAccesses(originDoMethod.metaData_, originDoMethod.ASTStmtToSAPMap_,
+                  originDoMethod.sapRange());
+  computeAccesses(destinationDoMethod.metaData_, destinationDoMethod.ASTStmtToSAPMap_,
+                  destinationDoMethod.sapRange());
 }
 
 const std::shared_ptr<DependencyGraphAccesses>& DoMethod::getDependencyGraph() const {
@@ -195,7 +265,7 @@ json::json DoMethod::jsonDump(const StencilMetaInformation& metaData) const {
   node["Fields"] = fieldsJson;
 
   json::json stmtsJson;
-  for(const auto& sap : sapRange()) {
+  for(const auto& sap : sapConstRange()) {
     stmtsJson.push_back(sap.jsonDump(metaData));
   }
   node["Stmts"] = stmtsJson;

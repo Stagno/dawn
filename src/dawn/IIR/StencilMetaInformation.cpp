@@ -435,6 +435,14 @@ int StencilMetaInformation::insertTmpField(FieldAccessType type, const std::stri
   return accessID;
 }
 
+void StencilMetaInformation::removeLiteral(int AccessID) {
+  // TODO: merge it in removeAccessID?
+  DAWN_ASSERT(isAccessType(FieldAccessType::FAT_Literal, AccessID));
+  fieldAccessMetadata_.LiteralAccessIDToNameMap_.erase(AccessID);
+  fieldAccessMetadata_.accessIDType_.erase(AccessID);
+  AccessIDToNameMap_.directEraseKey(AccessID);
+}
+
 void StencilMetaInformation::removeAccessID(int AccessID) {
   AccessIDToNameMap_.directEraseKey(AccessID);
 

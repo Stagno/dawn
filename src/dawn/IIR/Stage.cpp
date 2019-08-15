@@ -32,7 +32,7 @@
 namespace dawn {
 namespace iir {
 
-Stage::Stage(const StencilMetaInformation& metaData, int StageID)
+Stage::Stage(StencilMetaInformation& metaData, int StageID)
     : metaData_(metaData), StageID_(StageID) {}
 
 json::json Stage::jsonDump(const StencilMetaInformation& metaData) const {
@@ -205,7 +205,7 @@ void Stage::updateGlobalVariablesInfo() {
 
   for(const auto& doMethodPtr : getChildren()) {
     const DoMethod& doMethod = *doMethodPtr;
-    for(const auto& statementAccessesPair : doMethod.sapRange()) {
+    for(const auto& statementAccessesPair : doMethod.sapConstRange()) {
       const auto& access = statementAccessesPair.getAccesses();
       DAWN_ASSERT(access);
       for(const auto& accessPair : access->getWriteAccesses()) {
@@ -290,25 +290,22 @@ Stage::split(std::deque<int>& splitterIndices,
   std::vector<std::unique_ptr<Stage>> newStages;
 
   splitterIndices.push_back(thisDoMethod.getStmts().size() - 1);
-  DoMethod::StmtsConstIterator prevSplitterIndex = thisDoMethod.stmtsBegin().clone();
 
   // Create new stages
   for(std::size_t i = 0; i < splitterIndices.size(); ++i) {
-    DoMethod::StmtsConstIterator nextSplitterIndex =
-        std::next(thisDoMethod.stmtsBegin().clone(), splitterIndices[i] + 1);
+    std::size_t stmtBlockSize = splitterIndices[i + 1] - splitterIndices[i];
+    // TODO REIMPLEMENT considering that statements are not std::move'd but completely removed from
+    // the container (which changes size)
 
     newStages.push_back(make_unique<Stage>(metaData_, UIDGenerator::getInstance()->get()));
     Stage& newStage = *newStages.back();
-    auto range = IteratorRange<DoMethod::SAPConstIterator>(
-        DoMethod::SAPConstIterator(prevSplitterIndex, thisDoMethod.getASTStmtToSAPMap()),
-        DoMethod::SAPConstIterator(nextSplitterIndex, thisDoMethod.getASTStmtToSAPMap()));
-    // The new stage contains the statements in the range [prevSplitterIndex , nextSplitterIndex)
-    // TODO: check correctness!
-    // TODO  iir_restructuring : this code used to std::move statements to the new doMethod... is
-    // this the intended behavior?
-    newStage.insertChild(
-        make_unique<DoMethod>(thisDoMethod.getInterval(), metaData_, std::move(range)));
+
+    newStage.insertChild(make_unique<DoMethod>(thisDoMethod.getInterval(), metaData_));
     DoMethod& doMethod = newStage.getSingleDoMethod();
+    // The new stage contains the statements in the range [splitterIndices[i] , splitterIndices[i +
+    // 1])
+    DoMethod::moveStatementsBefore(std::move(thisDoMethod.stmtsBegin()), thisDoMethod,
+                                   std::move(doMethod.stmtsEnd()), doMethod, stmtBlockSize);
 
     if(graphs)
       doMethod.setDependencyGraph((*graphs)[i]);
@@ -316,8 +313,6 @@ Stage::split(std::deque<int>& splitterIndices,
     // Update the fields of the new doMethod
     doMethod.update(NodeUpdateType::level);
     newStage.update(NodeUpdateType::level);
-
-    prevSplitterIndex = std::move(nextSplitterIndex);
   }
 
   return newStages;

@@ -42,7 +42,7 @@ class MultiStage;
 /// @ingroup optimizer
 class Stage : public IIRNode<MultiStage, Stage, DoMethod> {
 
-  const StencilMetaInformation& metaData_;
+  StencilMetaInformation& metaData_;
 
   /// Unique identifier of the stage
   int StageID_;
@@ -79,7 +79,7 @@ public:
 
   /// @name Constructors and Assignment
   /// @{
-  Stage(const StencilMetaInformation& metaData, int StageID);
+  Stage(StencilMetaInformation& metaData, int StageID);
 
   Stage(Stage&&) = default;
 
