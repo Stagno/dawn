@@ -19,6 +19,7 @@
 #include "dawn/Support/Unreachable.h"
 
 namespace dawn {
+
 namespace codegen {
 namespace cxxnaiveico {
 
